@@ -21,12 +21,16 @@ TEMPLATE_REPO = "https://github.com/mohammedaminedahmani-tech/odoo-devops-templa
 # Fichiers copiés à la RACINE du repo
 FICHIERS_RACINE = [
     "claude_review_v2.py",
-    ".pre-commit-config-v2.yaml",
     "e2e.py",
     "requirements.txt",
     "projet.md",
     ".env.example",
     "SETUP.md",
+]
+
+# Fichiers copiés dans le SOUS-DOSSIER (là où est le .git)
+FICHIERS_SOUS_DOSSIER = [
+    ".pre-commit-config-v2.yaml",
 ]
 
 # Dossiers copiés à la RACINE du repo
@@ -41,18 +45,22 @@ A_SUPPRIMER = [
     "odoo-devops-template",
 ]
 
+
 def remove_readonly(func, path, excinfo):
     os.chmod(path, stat.S_IWRITE)
     func(path)
 
+
 def rmtree_force(path):
     shutil.rmtree(path, onerror=remove_readonly)
+
 
 def run(cmd, cwd=None, ignore_error=False):
     r = subprocess.run(cmd, shell=True, cwd=cwd)
     if r.returncode != 0 and not ignore_error:
         print(f"❌ Erreur : {cmd}")
         sys.exit(1)
+
 
 def main():
     print("=" * 60)
@@ -72,6 +80,7 @@ def main():
 
     repo_name   = github_repo.split("/")[-1]
     project_dir = os.path.join(clone_parent, repo_name)
+    target      = os.path.join(project_dir, sous_dossier)
 
     # ── 2. Clone le repo cible ────────────────────────────────────────────
     print(f"\n📥 Clonage de {github_repo}...")
@@ -81,7 +90,12 @@ def main():
         run(f'git clone https://github.com/{github_repo}.git "{project_dir}"')
         print(f"   ✅ Repo cloné")
 
-    # ── 3. Clone le template dans un dossier tmp ──────────────────────────
+    # ── 3. Dossier cible (sous-dossier des modules) ───────────────────────
+    if not os.path.exists(target):
+        os.makedirs(target)
+        print(f"   ✅ Sous-dossier créé : {sous_dossier}/")
+
+    # ── 4. Clone le template dans un dossier tmp ──────────────────────────
     print(f"\n📥 Téléchargement du template DevOps...")
     template_tmp = os.path.join(project_dir, "_template_tmp")
     if os.path.exists(template_tmp):
@@ -89,7 +103,7 @@ def main():
     run(f'git clone {TEMPLATE_REPO} "{template_tmp}"')
     print(f"   ✅ Template téléchargé")
 
-    # ── 4. Copie des fichiers à la RACINE du repo ─────────────────────────
+    # ── 5. Copie des fichiers à la RACINE ────────────────────────────────
     print("\n📦 Copie des fichiers DevOps à la racine...")
     for fichier in FICHIERS_RACINE:
         src = os.path.join(template_tmp, fichier)
@@ -109,7 +123,18 @@ def main():
         else:
             print(f"   ⚠️  {dossier}/ introuvable")
 
-    # ── 5. Configuration claude_review_v2.py ─────────────────────────────
+    # ── 6. Copie des fichiers dans le SOUS-DOSSIER ───────────────────────
+    print(f"\n📦 Copie des fichiers dans {sous_dossier}/...")
+    for fichier in FICHIERS_SOUS_DOSSIER:
+        src = os.path.join(template_tmp, fichier)
+        dst = os.path.join(target, fichier)
+        if os.path.exists(src):
+            shutil.copy2(src, dst)
+            print(f"   ✅ {fichier} → {sous_dossier}/")
+        else:
+            print(f"   ⚠️  {fichier} introuvable")
+
+    # ── 7. Configuration claude_review_v2.py ─────────────────────────────
     print("\n⚙️  Configuration claude_review_v2.py...")
     review_path = os.path.join(project_dir, "claude_review_v2.py")
     if os.path.exists(review_path):
@@ -140,7 +165,7 @@ def main():
             f.write(content)
         print("   ✅ claude_review_v2.py configuré")
 
-    # ── 6. Configuration e2e.py ───────────────────────────────────────────
+    # ── 8. Configuration e2e.py ───────────────────────────────────────────
     print("\n⚙️  Configuration e2e.py...")
     e2e_path = os.path.join(project_dir, "e2e.py")
     if os.path.exists(e2e_path):
@@ -158,7 +183,7 @@ def main():
             f.write(content)
         print("   ✅ e2e.py configuré")
 
-    # ── 7. Nettoyage ──────────────────────────────────────────────────────
+    # ── 9. Nettoyage ──────────────────────────────────────────────────────
     print("\n🧹 Nettoyage...")
     for item in A_SUPPRIMER:
         path = os.path.join(project_dir, item)
@@ -169,30 +194,29 @@ def main():
             os.remove(path)
             print(f"   🗑️  {item} supprimé")
 
-    # ── 8. Installation des dépendances ───────────────────────────────────
+    # ── 10. Installation des dépendances ──────────────────────────────────
     print("\n📦 Installation des dépendances Python...")
     req_path = os.path.join(project_dir, "requirements.txt")
     run(f'pip install -r "{req_path}"', cwd=project_dir)
     print("   ✅ Dépendances installées")
 
-    # ── 9. Installation pre-commit depuis la RACINE ───────────────────────
+    # ── 11. Installation pre-commit depuis le SOUS-DOSSIER ────────────────
     print("\n🔧 Installation pre-commit...")
     run(
         'pre-commit install --config .pre-commit-config-v2.yaml',
-        cwd=project_dir
+        cwd=target
     )
     print("   ✅ Pre-commit installé")
 
-    # ── 10. Push vers GitHub ──────────────────────────────────────────────
+    # ── 12. Push vers GitHub ──────────────────────────────────────────────
     print("\n🚀 Push vers GitHub...")
-    run("git add .", cwd=project_dir)
-    run("git rm --cached odoo-devops-template 2>nul", cwd=project_dir, ignore_error=True)
-    run('git commit -m "chore: apply odoo-devops-template"', cwd=project_dir, ignore_error=True)
-    run("git pull --rebase", cwd=project_dir, ignore_error=True)
-    run("git push", cwd=project_dir)
+    run("git add .", cwd=target)
+    run('git commit -m "chore: apply odoo-devops-template"', cwd=target, ignore_error=True)
+    run("git pull --rebase", cwd=target, ignore_error=True)
+    run("git push", cwd=target)
     print("   ✅ Push effectué")
 
-    # ── 11. Résumé ────────────────────────────────────────────────────────
+    # ── 13. Résumé ────────────────────────────────────────────────────────
     print("\n" + "=" * 60)
     print("✅ Installation terminée !")
     print("=" * 60)
@@ -203,6 +227,7 @@ def main():
     print("   4. Remplis projet.md avec ton cahier des charges")
     print("\n📖 Consulte SETUP.md pour plus de détails")
     print("=" * 60)
+
 
 if __name__ == "__main__":
     main()
