@@ -1,5 +1,20 @@
 # 🚀 Odoo DevOps Template — Guide de configuration
 
+---
+
+## 📌 Deux cas d'utilisation
+
+### Cas 1 — Nouveau projet from scratch
+1. Va sur `github.com/mohammedaminedahmani-tech/odoo-devops-template`
+2. Clique **"Use this template"** → **"Create a new repository"**
+3. Suis les étapes de configuration ci-dessous
+
+### Cas 2 — Projet existant (ajouter DevOps à un projet déjà créé)
+1. Clone le template :
+```bash
+   git clone https://github.com/mohammedaminedahmani-tech/odoo-devops-template.git
+```
+2. Copie ces fichiers/dossiers dans ton projet existant :
 ## Ce que fait ce template
 - **Pre-commit v2** : Analyse du code avant chaque commit (RAG + MCP Odoo Live)
 - **Claude Chat Expert** : Agent IA pour poser des questions sur le projet via GitHub Issues
