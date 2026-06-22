@@ -216,6 +216,11 @@ def main():
     run('git commit -m "chore: fix pre-commit auto-fixes"', cwd=target, ignore_error=True)
     run("git pull --rebase", cwd=target, ignore_error=True)
     run("git push", cwd=target)
+    # Push aussi les fichiers racine
+    run("git add .", cwd=project_dir, ignore_error=True)
+    run('git commit -m "chore: add root devops files"', cwd=project_dir, ignore_error=True)
+    run("git pull --rebase", cwd=project_dir, ignore_error=True)
+    run("git push", cwd=project_dir, ignore_error=True)
     print("   ✅ Push effectué")
 
     # ── 13. Résumé ────────────────────────────────────────────────────────
