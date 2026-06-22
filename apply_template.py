@@ -200,13 +200,7 @@ def main():
     run(f'pip install -r "{req_path}"', cwd=project_dir)
     print("   ✅ Dépendances installées")
 
-    # ── 11. Installation pre-commit depuis le SOUS-DOSSIER ────────────────
-    print("\n🔧 Installation pre-commit...")
-    run(
-        'pre-commit install --config .pre-commit-config-v2.yaml',
-        cwd=target
-    )
-    print("   ✅ Pre-commit installé")
+
 
     # ── 12. Push vers GitHub ──────────────────────────────────────────────
     print("\n🚀 Push vers GitHub...")
