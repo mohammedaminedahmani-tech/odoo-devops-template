@@ -173,6 +173,10 @@ def main():
     run("git add .", cwd=target)
     run('git commit -m "chore: apply odoo-devops-template"', cwd=target, ignore_error=True)
     run("git push", cwd=target)
+    # Push les fichiers racine aussi
+    run("git add .", cwd=project_dir, ignore_error=True)
+    run('git commit -m "chore: add root devops files"', cwd=project_dir, ignore_error=True)
+    run("git push", cwd=project_dir, ignore_error=True)
     print("   ✅ Push effectué")
 
     # ── 10. Auto-suppression du script ────────────────────────────────────
