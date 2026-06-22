@@ -201,6 +201,7 @@ def main():
     run("git add .", cwd=project_dir)
     run("git rm --cached odoo-devops-template 2>nul", cwd=project_dir, ignore_error=True)
     run('git commit -m "chore: apply odoo-devops-template"', cwd=project_dir)
+    run("git pull --rebase", cwd=project_dir, ignore_error=True)
     run("git push", cwd=project_dir)
     print("   ✅ Push effectué")
 
