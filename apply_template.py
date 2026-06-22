@@ -14,6 +14,7 @@ import os
 import sys
 import shutil
 import subprocess
+import stat
 
 TEMPLATE_REPO = "https://github.com/mohammedaminedahmani-tech/odoo-devops-template.git"
 
@@ -38,6 +39,15 @@ A_SUPPRIMER = [
     "_template_tmp",          # dossier template temporaire
     "odoo-devops-template",   # si cloné par erreur dans le projet
 ]
+
+
+
+def remove_readonly(func, path, excinfo):
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
+
+def rmtree_force(path):
+    shutil.rmtree(path, onerror=remove_readonly)
 
 def run(cmd, cwd=None, ignore_error=False):
     r = subprocess.run(cmd, shell=True, cwd=cwd)
@@ -82,7 +92,7 @@ def main():
     print(f"\n📥 Téléchargement du template DevOps...")
     template_tmp = os.path.join(project_dir, "_template_tmp")
     if os.path.exists(template_tmp):
-        shutil.rmtree(template_tmp)
+        rmtree_force(template_tmp)
     run(f'git clone {TEMPLATE_REPO} "{template_tmp}"')
     print(f"   ✅ Template téléchargé")
 
@@ -161,7 +171,7 @@ def main():
     for item in A_SUPPRIMER:
         path = os.path.join(project_dir, item)
         if os.path.isdir(path):
-            shutil.rmtree(path)
+            rmtree_force(path)
             print(f"   🗑️  {item}/ supprimé")
         elif os.path.isfile(path):
             os.remove(path)
