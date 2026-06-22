@@ -52,7 +52,8 @@ def main():
 
     # ── 1. Infos GitHub ───────────────────────────────────────────────────
     print("\n📋 Informations GitHub :")
-    github_repo = input("   GitHub repo cible (ex: org/Bonbino-confort-staging) ? ").strip()
+    github_repo  = input("   GitHub repo cible (ex: org/Bonbino-confort-staging) ? ").strip()
+    clone_parent = input("   Dossier où cloner le repo (ex: C:\\Users\\DAHMANI\\OneDrive\\Bureau) ? ").strip().strip('"')
     sous_dossier = input("   Nom du sous-dossier des modules (ex: Bonbino-confort-staging) ? ").strip()
 
     # ── 2. Infos projet ───────────────────────────────────────────────────
@@ -66,12 +67,12 @@ def main():
     # ── 3. Clone le repo cible ────────────────────────────────────────────
     print(f"\n📥 Clonage de {github_repo}...")
     repo_name = github_repo.split("/")[-1]
-    clone_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), repo_name)
+    clone_dir = os.path.join(clone_parent, repo_name)
 
     if os.path.exists(clone_dir):
         print(f"   ⚠️  Dossier {repo_name} existe déjà — on l'utilise tel quel")
     else:
-        run(f"git clone https://github.com/{github_repo}.git {clone_dir}")
+        run(f'git clone https://github.com/{github_repo}.git "{clone_dir}"')
         print(f"   ✅ Repo cloné dans {clone_dir}")
 
     # ── 4. Dossier cible (sous-dossier des modules) ───────────────────────
@@ -93,7 +94,7 @@ def main():
         else:
             print(f"   ⚠️  {fichier} introuvable dans le template")
 
-    # .github et mcp-odoo vont à la RACINE du repo (pas dans le sous-dossier)
+    # .github et mcp-odoo vont à la RACINE du repo
     for dossier in DOSSIERS:
         src = os.path.join(template_dir, dossier)
         dst = os.path.join(clone_dir, dossier)
@@ -103,7 +104,7 @@ def main():
         else:
             print(f"   ⚠️  {dossier}/ introuvable dans le template")
 
-    # SETUP.md va à la racine
+    # SETUP.md à la racine
     shutil.copy2(
         os.path.join(template_dir, "SETUP.md"),
         os.path.join(clone_dir, "SETUP.md")
