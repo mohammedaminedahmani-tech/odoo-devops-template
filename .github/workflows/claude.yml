@@ -1,0 +1,48 @@
+name: Claude Code
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+jobs:
+  claude:
+    # Se déclenche uniquement si on mentionne @claude
+    if: contains(github.event.comment.body, '@claude')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Préparer le contexte Odoo et les instructions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 1. On télécharge discrètement tes issues
+          gh issue view 3 --comments > issue_3_reports.txt || echo "Aucun rapport trouvé." > issue_3_reports.txt
+          gh issue view 4 --comments > issue_4_convo.txt || echo "Aucune conversation trouvée." > issue_4_convo.txt
+
+          # 2. On crée les directives globales que Claude lira de lui-même
+          cat << 'EOF' > CLAUDE.md
+          Tu es un assistant expert en développement Odoo (Python, XML, JS/OWL, PostgreSQL).
+          Tu dois TOUJOURS répondre exclusivement en français.
+
+          Avant de répondre, tu dois consulter et prendre en compte les deux fichiers de contexte générés à la racine :
+          - `issue_3_reports.txt` : Contient l'analyse du code.
+          - `issue_4_convo.txt` : Contient l'historique de nos échanges.
+          Sois précis, structuré, et va droit au but.
+          EOF
+
+      - name: Run Claude Code
+        # On lance l'action de façon purement native (pas de paramètre prompt manuel)
+        uses: anthropics/claude-code-action@v1.0.142
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

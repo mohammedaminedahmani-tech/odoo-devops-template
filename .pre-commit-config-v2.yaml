@@ -1,0 +1,79 @@
+# =============================================================================
+# .pre-commit-config-v2.yaml — Version 2 (RAG + MCP Odoo Live)
+# =============================================================================
+#
+#  UTILISATION :
+#
+#    Mode 1 — Pre-commit normal (fichiers staged) :
+#      git commit -m "feat: ..."
+#      pre-commit run --config .pre-commit-config-v2.yaml
+#
+#    Mode 2 — Audit global (tous les fichiers) :
+#      pre-commit run --config .pre-commit-config-v2.yaml claude-review-v2-audit
+#
+#    Mode 3 — Analyse module précis + dépendances :
+#      pre-commit run --config .pre-commit-config-v2.yaml claude-review-v2-module
+#      AVEC variable d'env :
+#      $env:ANALYSE_MODULE="dc_payment_manage"
+#      pre-commit run --config .pre-commit-config-v2.yaml claude-review-v2-module
+#
+# =============================================================================
+
+repos:
+
+  # ── 1. Vérifications rapides standard ─────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+
+  # ── 2. Linter Python flake8 ───────────────────────────────────────────────
+  - repo: https://github.com/PyCQA/flake8
+    rev: 7.1.0
+    hooks:
+      - id: flake8
+        args:
+          - "--max-line-length=120"
+          - "--exclude=migrations"
+          - "--extend-ignore=E501,E221,E302,E305,E272,F841,F541,E203"
+        files: \.py$
+        exclude: ^.*/(migrations|__pycache__|\.git)/.*$
+
+  # ── 3. Review IA v2 : Claude Code + RAG + MCP Odoo Live ───────────────────
+  - repo: local
+    hooks:
+
+      # Mode 1 — Pre-commit normal (fichiers staged)
+      - id: claude-review-v2
+        name: "Claude Review v2 (fichiers staged)"
+        language: system
+        entry: python claude_review_v2.py
+        pass_filenames: false
+        always_run: false
+        types_or: [python, xml, javascript, json]
+        verbose: true
+
+      # Mode 2 — Audit global
+      - id: claude-review-v2-audit
+        name: "Claude Review v2 (audit global)"
+        language: system
+        entry: python claude_review_v2.py --all
+        pass_filenames: false
+        always_run: false
+        stages: [manual]
+        verbose: true
+
+      # Mode 3 — Module précis + dépendances
+      - id: claude-review-v2-module
+        name: "Claude Review v2 (module précis)"
+        language: system
+        entry: python claude_review_v2.py --module-env
+        pass_filenames: false
+        always_run: false
+        stages: [manual]
+        verbose: true
