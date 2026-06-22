@@ -212,6 +212,8 @@ def main():
     print("\n🚀 Push vers GitHub...")
     run("git add .", cwd=target)
     run('git commit -m "chore: apply odoo-devops-template"', cwd=target, ignore_error=True)
+    run("git add .", cwd=target)
+    run('git commit -m "chore: fix pre-commit auto-fixes"', cwd=target, ignore_error=True)
     run("git pull --rebase", cwd=target, ignore_error=True)
     run("git push", cwd=target)
     print("   ✅ Push effectué")
