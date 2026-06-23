@@ -260,14 +260,18 @@ def main():
 
     # ── 11. Push ──────────────────────────────────────────────────────────
     print("\n🚀 Push vers GitHub...")
-    # (le .gitignore a déjà été configuré à l'étape 1b — ne pas le refaire ici)
+
+    # Annuler les commits locaux non pushés (cas d'un run précédent raté)
+    subprocess.run(
+        'git reset origin/main',
+        shell=True, cwd=project_dir, capture_output=True, text=True
+    )
 
     run("git add .", cwd=target)
     run('git commit -m "chore: apply odoo-devops-template"', cwd=target, ignore_error=True)
-    run("git push", cwd=target)
     run("git add .", cwd=project_dir, ignore_error=True)
     run('git commit -m "chore: add root devops files"', cwd=project_dir, ignore_error=True)
-    run("git push", cwd=project_dir, ignore_error=True)
+    run("git push --force-with-lease", cwd=project_dir, ignore_error=True)
     print("   ✅ Push effectué")
 
     # ── 12. Auto-suppression du script ────────────────────────────────────
