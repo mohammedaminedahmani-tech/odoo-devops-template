@@ -235,12 +235,18 @@ def main():
 
     # ── 10. Installation Playwright ───────────────────────────────────────
     print("\n📦 Installation Playwright...")
-    run("npm install playwright", cwd=project_dir, ignore_error=True)
+    run("npm install playwright --legacy-peer-deps", cwd=project_dir, ignore_error=True)
     run("npx playwright install chromium", cwd=project_dir, ignore_error=True)
     print("   ✅ Playwright installé")
 
     # ── 11. Push ──────────────────────────────────────────────────────────
     print("\n🚀 Push vers GitHub...")
+    
+    # Ajouter la base de données au .gitignore pour éviter l'erreur de taille GitHub
+    gitignore_path = os.path.join(project_dir, ".gitignore")
+    with open(gitignore_path, "a", encoding="utf-8") as f:
+        f.write("\nodoo_global_db_*/\nchroma.sqlite3\n")
+
     run("git add .", cwd=target)
     run('git commit -m "chore: apply odoo-devops-template"', cwd=target, ignore_error=True)
     run("git push", cwd=target)
