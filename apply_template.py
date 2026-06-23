@@ -133,8 +133,15 @@ def main():
             '"im-it@daisyconsulting.ma"',
             f'"{odoo_user}"'
         )
-        content = content.replace('"odoo"', f'"{odoo_pass}"')
+        content = content.replace(
+            'ODOO_PASSWORD = os.environ.get("ODOO_PASSWORD", "odoo")',
+            f'ODOO_PASSWORD = os.environ.get("ODOO_PASSWORD", "{odoo_pass}")'
+        )
         content = content.replace("Odoo 19", f"Odoo {odoo_ver}")
+        content = content.replace(
+            '"odoo_global_db"',
+            f'"odoo_global_db_{odoo_ver}.0"'
+        )
         with open(review_path, "w", encoding="utf-8") as f:
             f.write(content)
         print("   ✅ claude_review_v2.py configuré")

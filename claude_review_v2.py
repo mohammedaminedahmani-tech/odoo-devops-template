@@ -44,6 +44,8 @@ import urllib.request
 import urllib.error
 from datetime import datetime
 import shutil
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
 
 # ── FIX #3 : Desactivation SSL pour SaaS Odoo (dev uniquement) ───────────────
 # Le certificat dev.odoo.com ne couvre pas les sous-domaines custom.
@@ -77,7 +79,7 @@ MAX_TAILLE_FICHIER = 150000  # 150 KB
 MOT_CLE_OK = "COMMIT_OK"
 MOT_CLE_ERREUR = "COMMIT_ERREUR"
 
-FICHIER_PROJET = "projet_odoo_caisse_depense.md"
+FICHIER_PROJET = "SETUP.md"
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "odoo_global_db")
 
 # ── Configuration MCP Odoo Docker ─────────────────────────────────────────────
