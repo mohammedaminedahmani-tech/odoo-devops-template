@@ -152,41 +152,104 @@ def main():
     if os.path.exists(e2e_path):
         with open(e2e_path, encoding="utf-8") as f:
             content = f.read()
+
+        # Remplacer repo et URL
         content = content.replace(
             "mohammedaminedahmani-tech/extraplast_modules",
             github_repo
         )
         content = content.replace(
-            "https://daisy-consulting-extrat-plast7-test-33773518.dev.odoo.com",
-            odoo_url
+            "https://daisy-consulting-extrat-plast7-test-33773518.dev.odoo.com/",
+            odoo_url if odoo_url.endswith('/') else odoo_url + '/'
         )
+        content = content.replace(
+            '"im-it@daisyconsulting.ma"',
+            f'"{odoo_user}"'
+        )
+        content = content.replace(
+            'os.environ.get("ODOO_PASSWORD", "odoo")',
+            f'os.environ.get("ODOO_PASSWORD", "{odoo_pass}")'
+        )
+
+        # Auto-générer MODULES depuis les dossiers du projet
+        modules_dict = {}
+        if os.path.exists(target):
+            for dossier in sorted(os.listdir(target)):
+                manifest = os.path.join(target, dossier, '__manifest__.py')
+                if os.path.exists(manifest):
+                    modules_dict[dossier] = {
+                        'context': f'{sous_dossier}/{dossier}/CONTEXT.md',
+                    }
+
+        modules_str = "MODULES = {\n"
+        for mod, cfg in modules_dict.items():
+            modules_str += f"    '{mod}': {{\n"
+            modules_str += f"        'context': '{cfg['context']}',\n"
+            modules_str += f"    }},\n"
+        modules_str += "}"
+
+        content = content.replace("MODULES = {}", modules_str)
+
         with open(e2e_path, "w", encoding="utf-8") as f:
             f.write(content)
-        print("   ✅ e2e.py configuré")
+        print(f"   ✅ e2e.py configuré ({len(modules_dict)} modules détectés)")
 
-    # ── 7. Suppression du template tmp ────────────────────────────────────
+    # ── 7. Créer les CONTEXT.md vides pour chaque module ─────────────────
+    print("\n📝 Création des CONTEXT.md...")
+    context_template = """# CONTEXT.md — {module}
+
+## Description
+<!-- Décris brièvement ce que fait ce module -->
+
+## Scénarios à tester
+<!-- Liste les scénarios que Claude doit tester via Playwright -->
+
+### Scénario 1 : ...
+1. Aller sur ...
+2. Cliquer sur ...
+3. Vérifier que ...
+
+### Scénario 2 : ...
+1. ...
+"""
+    for dossier in sorted(os.listdir(target)):
+        manifest = os.path.join(target, dossier, '__manifest__.py')
+        if os.path.exists(manifest):
+            context_path = os.path.join(target, dossier, 'CONTEXT.md')
+            if not os.path.exists(context_path):
+                with open(context_path, 'w', encoding='utf-8') as f:
+                    f.write(context_template.format(module=dossier))
+                print(f"   ✅ {dossier}/CONTEXT.md créé")
+    print("   ✅ CONTEXT.md créés — remplis-les avant de lancer e2e.py")
+
+    # ── 8. Suppression du template tmp ────────────────────────────────────
     print("\n🧹 Nettoyage...")
     rmtree_force(template_tmp)
     print("   ✅ Template temporaire supprimé")
 
-    # ── 8. Installation des dépendances ───────────────────────────────────
+    # ── 9. Installation des dépendances Python ────────────────────────────
     print("\n📦 Installation des dépendances Python...")
     req_path = os.path.join(project_dir, "requirements.txt")
     run(f'pip install -r "{req_path}"')
-    print("   ✅ Dépendances installées")
+    print("   ✅ Dépendances Python installées")
 
-    # ── 9. Push ───────────────────────────────────────────────────────────
+    # ── 10. Installation Playwright ───────────────────────────────────────
+    print("\n📦 Installation Playwright...")
+    run("npm install playwright", cwd=project_dir, ignore_error=True)
+    run("npx playwright install chromium", cwd=project_dir, ignore_error=True)
+    print("   ✅ Playwright installé")
+
+    # ── 11. Push ──────────────────────────────────────────────────────────
     print("\n🚀 Push vers GitHub...")
     run("git add .", cwd=target)
     run('git commit -m "chore: apply odoo-devops-template"', cwd=target, ignore_error=True)
     run("git push", cwd=target)
-    # Push les fichiers racine aussi
     run("git add .", cwd=project_dir, ignore_error=True)
     run('git commit -m "chore: add root devops files"', cwd=project_dir, ignore_error=True)
     run("git push", cwd=project_dir, ignore_error=True)
     print("   ✅ Push effectué")
 
-    # ── 10. Auto-suppression du script ────────────────────────────────────
+    # ── 12. Auto-suppression du script ────────────────────────────────────
     print("\n🗑️  Suppression du script apply_template.py...")
     script_path = os.path.abspath(__file__)
     os.remove(script_path)
@@ -198,8 +261,10 @@ def main():
     print("\n📌 Étapes manuelles restantes :")
     print("   1. Copie ta base ChromaDB odoo_global_db/ dans le projet")
     print("   2. Ajoute les secrets GitHub (CLAUDE_CODE_OAUTH_TOKEN, PAT_TOKEN)")
-    print("   3. Crée les issues GitHub #3, #4, #9")
-    print("   4. Remplis projet.md avec ton cahier des charges")
+    print("   3. Crée les issues GitHub #1, #2, #3")
+    print("   4. Crée le fichier .env avec tes credentials")
+    print("   5. Remplis les CONTEXT.md de chaque module pour les tests E2E")
+    print("   6. Remplis SETUP.md avec ton cahier des charges")
     print("=" * 60)
 
 
