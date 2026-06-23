@@ -24,7 +24,7 @@ from datetime import datetime
 
 ROOT               = os.path.dirname(os.path.abspath(__file__))
 GITHUB_REPO        = "mohammedaminedahmani-tech/extraplast_modules"
-GITHUB_ISSUE_NUMBER = 9
+GITHUB_ISSUE_NUMBER = 3
 ODOO_URL           = "https://daisy-consulting-extrat-plast7-test-33773518.dev.odoo.com/"
 ODOO_EMAIL         = "im-it@daisyconsulting.ma"
 ODOO_PASSWORD      = "odoo"

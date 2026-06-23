@@ -70,7 +70,7 @@ from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunct
 
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 GITHUB_REPO = "mohammedaminedahmani-tech/extraplast_modules"
-GITHUB_ISSUE_NUM = 3
+GITHUB_ISSUE_NUM = 1
 EMAIL_ONLY_ERRORS = False
 
 EXTENSIONS_CIBLES = {".py", ".xml", ".js", ".csv", ".json"}

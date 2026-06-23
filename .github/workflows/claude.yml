@@ -26,8 +26,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # 1. On télécharge discrètement tes issues
-          gh issue view 3 --comments > issue_3_reports.txt || echo "Aucun rapport trouvé." > issue_3_reports.txt
-          gh issue view 4 --comments > issue_4_convo.txt || echo "Aucune conversation trouvée." > issue_4_convo.txt
+          gh issue view 1 --comments > issue_1_reports.txt || echo "Aucun rapport trouvé." > issue_1_reports.txt
+          gh issue view 2 --comments > issue_2_convo.txt || echo "Aucune conversation trouvée." > issue_2_convo.txt
 
           # 2. On crée les directives globales que Claude lira de lui-même
           cat << 'EOF' > CLAUDE.md
@@ -35,8 +35,8 @@ jobs:
           Tu dois TOUJOURS répondre exclusivement en français.
 
           Avant de répondre, tu dois consulter et prendre en compte les deux fichiers de contexte générés à la racine :
-          - `issue_3_reports.txt` : Contient l'analyse du code.
-          - `issue_4_convo.txt` : Contient l'historique de nos échanges.
+          - `issue_1_reports.txt` : Contient l'analyse du code.
+          - `issue_2_convo.txt` : Contient l'historique de nos échanges.
           Sois précis, structuré, et va droit au but.
           EOF
 
@@ -46,3 +46,4 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          
