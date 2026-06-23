@@ -7,10 +7,6 @@ on:
         description: 'Module à tester (ex: dc_caisse_transfer)'
         required: false
         type: string
-      group:
-        description: 'Groupe à tester (ex: paiement_client)'
-        required: false
-        type: string
       all:
         description: 'Tester tous les modules'
         required: false
@@ -32,7 +28,7 @@ jobs:
           python-version: '3.11'
 
       - name: 📦 Install Python dependencies
-        run: pip install requests
+        run: pip install requests python-dotenv
 
       - name: 🟢 Setup Node.js
         uses: actions/setup-node@v4
@@ -51,14 +47,13 @@ jobs:
         run: |
           if [ "${{ inputs.all }}" = "true" ]; then
             python e2e.py --all
-          elif [ -n "${{ inputs.group }}" ]; then
-            python e2e.py --group=${{ inputs.group }}
           elif [ -n "${{ inputs.module }}" ]; then
             python e2e.py --module=${{ inputs.module }}
           else
-            echo "❌ Aucun module, groupe ou --all spécifié"
+            echo "❌ Spécifie --module=nom ou active --all"
             exit 1
           fi
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          ODOO_PASSWORD: ${{ secrets.ODOO_PASSWORD }}

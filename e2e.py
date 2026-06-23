@@ -4,8 +4,7 @@ e2e.py — Orchestrateur E2E via Claude Code + MCP Playwright
 =============================================================
 
 Usage :
-  python e2e.py --module=dc_caisse_transfer
-  python e2e.py --group=paiement_client
+  python e2e.py --module=nom_module
   python e2e.py --all
   python e2e.py --list
 """
@@ -17,54 +16,25 @@ import shutil
 import json
 import requests
 from datetime import datetime
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
 
 # ══════════════════════════════════════════════════════════════════════════════
 # CONFIGURATION GLOBALE
 # ══════════════════════════════════════════════════════════════════════════════
 
-ROOT               = os.path.dirname(os.path.abspath(__file__))
-GITHUB_REPO        = "mohammedaminedahmani-tech/extraplast_modules"
+ROOT                = os.path.dirname(os.path.abspath(__file__))
+GITHUB_REPO         = "mohammedaminedahmani-tech/extraplast_modules"
 GITHUB_ISSUE_NUMBER = 3
-ODOO_URL           = "https://daisy-consulting-extrat-plast7-test-33773518.dev.odoo.com/"
-ODOO_EMAIL         = "im-it@daisyconsulting.ma"
-ODOO_PASSWORD      = "odoo"
+ODOO_URL            = "https://daisy-consulting-extrat-plast7-test-33773518.dev.odoo.com/"
+ODOO_EMAIL          = "im-it@daisyconsulting.ma"
+ODOO_PASSWORD       = os.environ.get("ODOO_PASSWORD", "odoo")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# MAPPING MODULES
+# MAPPING MODULES (auto-généré par apply_template.py)
 # ══════════════════════════════════════════════════════════════════════════════
 
-MODULES = {
-    'dc_caisse_transfer': {
-        'group':   'paiement_client',
-        'context': 'Extrat-plast7/dc_caisse_transfer/CONTEXT.md',
-    },
-    'dc_export_payment': {
-        'group':   'paiement_client',
-        'context': 'Extrat-plast7/dc_export_payment/CONTEXT.md',
-    },
-    'dc_payment_lettrage': {
-        'group':   'paiement_client',
-        'context': 'Extrat-plast7/dc_payment_lettrage/CONTEXT.md',
-    },
-    'dc_payment_manage': {
-        'group':   'paiement_client',
-        'context': 'Extrat-plast7/dc_payment_manage/CONTEXT.md',
-    },
-    'payment_dashboard': {
-        'group':   'paiement_client',
-        'context': 'Extrat-plast7/payment_dashboard/CONTEXT.md',
-    },
-    'dc_sous_client': {
-        'group':   'paiement_client',
-        'context': 'Extrat-plast7/dc_sous_client/CONTEXT.md',
-    },
-}
-
-# Groupes logiques
-GROUPS = {
-    g: [m for m, c in MODULES.items() if c['group'] == g]
-    for g in set(c['group'] for c in MODULES.values())
-}
+MODULES = {}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -75,18 +45,15 @@ def poster_rapport_github(rapport: str):
     """Poste le rapport comme commentaire dans l'Issue GitHub."""
 
     token = None
-    # Lire depuis .env.local en priorité
-    env_path = os.path.join(ROOT, '.env.local')
+    env_path = os.path.join(ROOT, '.env')
     if os.path.exists(env_path):
         with open(env_path, encoding='utf-8') as f:
             for line in f:
                 if line.startswith('GITHUB_TOKEN='):
                     token = line.strip().split('=', 1)[1]
                     break
-    # Fallback variable d'environnement
     if not token:
         token = os.environ.get('GITHUB_TOKEN')
-    
 
     if not token:
         print("[e2e] ⚠️  GITHUB_TOKEN manquant — rapport non posté sur GitHub")
@@ -128,20 +95,25 @@ def trouver_claude():
 
 
 def tester_module(module_name: str) -> str:
-    """Lance Claude Code pour tester un module via MCP Playwright.
-    Retourne le rapport en markdown."""
+    """Lance Claude Code pour tester un module via MCP Playwright."""
 
     config = MODULES[module_name]
     context_path = config['context']
 
-    # Vérifier que le CONTEXT.md existe
     full_context_path = os.path.join(ROOT, context_path)
     if not os.path.exists(full_context_path):
         msg = f"❌ **{module_name}** — CONTEXT.md manquant : `{context_path}`"
         print(f"[e2e] {msg}")
         return msg
 
-    # Vérifier Claude Code
+    # Vérifier que le CONTEXT.md n'est pas vide
+    with open(full_context_path, encoding='utf-8') as f:
+        content = f.read().strip()
+    if not content:
+        msg = f"⚠️ **{module_name}** — CONTEXT.md vide — remplis-le avant de lancer les tests"
+        print(f"[e2e] {msg}")
+        return msg
+
     claude_exe = trouver_claude()
     if not claude_exe:
         print("[e2e] ❌ Claude Code CLI introuvable.")
@@ -233,7 +205,7 @@ def assembler_rapport(modules_testes: list, rapports: dict, label: str) -> str:
         lignes.append("")
 
     lignes.append("---")
-    lignes.append(f"*Généré automatiquement par `e2e.py` + Claude Code + MCP Playwright*")
+    lignes.append("*Généré automatiquement par `e2e.py` + Claude Code + MCP Playwright*")
 
     return "\n".join(lignes)
 
@@ -260,45 +232,40 @@ def sauvegarder_rapport_local(rapport: str, label: str):
 
 def main():
     module  = None
-    group   = None
     run_all = False
-    post_only = False
 
     for arg in sys.argv[1:]:
         if arg.startswith('--module='):
             module = arg.split('=', 1)[1].strip()
-        elif arg.startswith('--group='):
-            group = arg.split('=', 1)[1].strip()
         elif arg == '--all':
             run_all = True
-        elif arg == '--post-only':
-            post_last_report()
-            sys.exit(0)
         elif arg == '--list':
             print("\nModules disponibles :\n")
-            for g, mods in GROUPS.items():
-                print(f"  Groupe '{g}' :")
-                for m in mods:
-                    ctx = MODULES[m]['context']
-                    existe = "✅" if os.path.exists(os.path.join(ROOT, ctx)) else "❌ CONTEXT.md manquant"
-                    print(f"    - {m} {existe}")
-                print()
+            for m, cfg in MODULES.items():
+                ctx = cfg['context']
+                full = os.path.join(ROOT, ctx)
+                if not os.path.exists(full):
+                    statut = "❌ CONTEXT.md manquant"
+                else:
+                    with open(full, encoding='utf-8') as f:
+                        statut = "✅ Prêt" if f.read().strip() else "⚠️  CONTEXT.md vide"
+                print(f"  - {m} {statut}")
+            print()
             sys.exit(0)
 
-    if not any([module, group, run_all]):
-        print("""
+    if not any([module, run_all]):
+        print(f"""
 ╔══════════════════════════════════════════════════════════════╗
 ║        E2E Orchestrateur — Claude Code + MCP Playwright      ║
 ╚══════════════════════════════════════════════════════════════╝
 
 Usage :
-  python e2e.py --module=dc_caisse_transfer
-  python e2e.py --group=paiement_client
+  python e2e.py --module=nom_module
   python e2e.py --all
   python e2e.py --list
 
 Rapport posté automatiquement dans :
-  https://github.com/mohammedaminedahmani-tech/extraplast_modules/issues/9
+  https://github.com/{GITHUB_REPO}/issues/{GITHUB_ISSUE_NUMBER}
         """)
         sys.exit(0)
 
@@ -309,19 +276,10 @@ Rapport posté automatiquement dans :
             print(f"[e2e] Lance : python e2e.py --list")
             sys.exit(1)
         modules_a_tester = [module]
-        label = f"module: {module}"
-
-    elif group:
-        if group not in GROUPS:
-            print(f"[e2e] Groupe inconnu : '{group}'")
-            print(f"[e2e] Groupes disponibles : {list(GROUPS.keys())}")
-            sys.exit(1)
-        modules_a_tester = GROUPS[group]
-        label = f"groupe: {group}"
-
+        label = f"module_{module}"
     else:
         modules_a_tester = list(MODULES.keys())
-        label = "tous les modules"
+        label = "tous_les_modules"
 
     # ── Tester chaque module ──────────────────────────────────────────────────
     print(f"\n[e2e] 🚀 Lancement — {label}")
@@ -334,8 +292,7 @@ Rapport posté automatiquement dans :
 
     # ── Assembler et poster le rapport ────────────────────────────────────────
     rapport_final = assembler_rapport(modules_a_tester, rapports, label)
-
-    sauvegarder_rapport_local(rapport_final, label.replace(' ', '_').replace(':', ''))
+    sauvegarder_rapport_local(rapport_final, label)
     poster_rapport_github(rapport_final)
 
     print(f"\n[e2e] ✅ Terminé — {len(modules_a_tester)} module(s) testés")

@@ -72,6 +72,25 @@ def main():
     if not os.path.exists(target):
         os.makedirs(target)
 
+    # ── 1b. .gitignore — AVANT tout git add ───────────────────────────────
+    print("\n📝 Mise à jour .gitignore...")
+    gitignore_path = os.path.join(project_dir, ".gitignore")
+    entries_a_ajouter = ["odoo_global_db_*/", "chroma.sqlite3", "_template_tmp/"]
+    lignes_existantes = set()
+    if os.path.exists(gitignore_path):
+        with open(gitignore_path, encoding="utf-8") as f:
+            lignes_existantes = set(f.read().splitlines())
+    with open(gitignore_path, "a", encoding="utf-8") as f:
+        for entry in entries_a_ajouter:
+            if entry not in lignes_existantes:
+                f.write(f"\n{entry}")
+    # Dé-stager si déjà tracké par erreur
+    subprocess.run(f'git rm -r --cached odoo_global_db_*/ --ignore-unmatch',
+                   shell=True, cwd=project_dir)
+    subprocess.run(f'git rm --cached chroma.sqlite3 --ignore-unmatch',
+                   shell=True, cwd=project_dir)
+    print("   ✅ .gitignore configuré")
+
     # ── 2. Clone le template ──────────────────────────────────────────────
     print(f"\n📥 Téléchargement du template...")
     template_tmp = os.path.join(project_dir, "_template_tmp")
@@ -241,11 +260,7 @@ def main():
 
     # ── 11. Push ──────────────────────────────────────────────────────────
     print("\n🚀 Push vers GitHub...")
-    
-    # Ajouter la base de données au .gitignore pour éviter l'erreur de taille GitHub
-    gitignore_path = os.path.join(project_dir, ".gitignore")
-    with open(gitignore_path, "a", encoding="utf-8") as f:
-        f.write("\nodoo_global_db_*/\nchroma.sqlite3\n")
+    # (le .gitignore a déjà été configuré à l'étape 1b — ne pas le refaire ici)
 
     run("git add .", cwd=target)
     run('git commit -m "chore: apply odoo-devops-template"', cwd=target, ignore_error=True)
