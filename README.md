@@ -448,3 +448,33 @@ Remove-Item "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
 npm cache clean --force
 pip cache purge
 ```
+
+## usuful prompmt to generete CONETEXT.md
+@claude
+
+Lis TOUT le contenu du module `[NOM_MODULE]` :
+- __manifest__.py
+- Tous les fichiers Python dans models/
+- Tous les fichiers XML dans views/ et reports/
+- security/ir.model.access.csv
+- static/ si présent
+
+Lis également TOUTES ses dépendances déclarées dans __manifest__.py (depends) :
+- Pour chaque dépendance custom (pas base/stock/purchase/etc.), lis aussi tous ses fichiers
+
+Ensuite génère un fichier CONTEXT.md ultra-complet pour ce module contenant :
+1. Objectif et description du module
+2. Liste des dépendances avec leur rôle
+3. Tous les modèles étendus avec leurs champs ajoutés et méthodes
+4. Toutes les vues personnalisées avec leurs modifications
+5. Tous les rapports PDF avec leur contenu
+6. Les flux de processus complets (sous forme de schémas texte)
+7. Les points d'attention pour les agents AI
+8. Les scénarios à tester (max 2, simples et rapides)
+
+Le fichier doit être suffisamment détaillé pour qu'un agent AI puisse comprendre et tester ce module sans aucune information supplémentaire.
+
+Ensuite :
+1. Crée une branche `doc/[NOM_MODULE]-context`
+2. Remplace le contenu de `Bonbino-confort-staging/[NOM_MODULE]/CONTEXT.md` par le contenu généré
+3. Crée un Pull Request vers `main` avec le titre `doc: CONTEXT.md [NOM_MODULE]`
