@@ -1,4 +1,4 @@
-Guide Final — Claude DevOps Odoo Template
+# Guide Final — Claude DevOps Odoo Template
 
 Ce que fait ce système
 
