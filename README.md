@@ -327,3 +327,124 @@ not a file	Mauvais dossier	cd sous-dossier-modules
 Token vide dans VS Code	VS Code pas redémarré	Utiliser les 2 blocs permanent + immédiat
 
 Collection does not exist	Mauvais chemin ChromaDB	Vérifier que odoo_global_db_18.0/ est à la racine
+
+# Commandes utiles — Claude DevOps Odoo Template
+
+---
+
+## Installation (une seule fois)
+
+```bash
+# Dépendances Python
+pip install -r requirements.txt
+
+# Claude Code CLI
+npm install -g @anthropic-ai/claude-code
+
+# MCP Playwright
+claude mcp add playwright npx @playwright/mcp@latest -- --headless
+
+# Playwright + Chromium
+npm init -y
+npm install playwright
+npx playwright install chromium
+
+# Installer le hook pre-commit
+pre-commit install -c Bonbino-confort-staging/.pre-commit-config-v2.yaml
+```
+
+---
+
+## Pre-commit — Analyser du code
+
+```bash
+# Lancer l'analyse sur un fichier stagé
+git add fichier_modifie.py
+pre-commit run --config .pre-commit-config-v2.yaml
+
+# Lancer sur tous les fichiers
+pre-commit run --config .pre-commit-config-v2.yaml --all-files
+```
+
+---
+
+## E2E Tests — Tester les modules
+
+```bash
+# Lister les modules disponibles
+python e2e.py --list
+
+# Tester un module
+python e2e.py --module=nom_module
+
+# Tester tous les modules
+python e2e.py --all
+
+# Reposter le dernier rapport sans relancer les tests
+python -c "from e2e import post_last_report; post_last_report()"
+```
+
+---
+
+## Git — Commandes utiles
+
+```bash
+# Configurer un 2ème remote
+git remote add daisy https://github.com/Daisy-Consulting/CI-CD-Claude.git
+git push -u daisy main
+
+# Push forcé après reset
+git push --force-with-lease
+
+# Retirer un fichier sensible du tracking
+git rm --cached .env
+git commit -m "fix: remove .env"
+git push
+
+# Annuler le dernier commit (fichiers conservés)
+git reset HEAD~1
+
+# Voir les remotes configurés
+git remote -v
+```
+
+---
+
+## Tokens — Mise à jour
+
+```powershell
+# Permanent
+$path = "HKCU:\Environment"
+Set-ItemProperty -Path $path -Name "GITHUB_TOKEN" -Value "ghp_xxx"
+Set-ItemProperty -Path $path -Name "PAT_TOKEN" -Value "ghp_xxx"
+Set-ItemProperty -Path $path -Name "CLAUDE_CODE_OAUTH_TOKEN" -Value "sk-ant-oat01-xxx"
+
+# Immédiat (session actuelle)
+$env:GITHUB_TOKEN = "ghp_xxx"
+$env:PAT_TOKEN = "ghp_xxx"
+$env:CLAUDE_CODE_OAUTH_TOKEN = "sk-ant-oat01-xxx"
+
+# Vérifier
+echo $env:GITHUB_TOKEN
+echo $env:PAT_TOKEN
+echo $env:CLAUDE_CODE_OAUTH_TOKEN
+```
+
+---
+
+## Token Claude expiré
+
+```bash
+claude auth login
+claude setup-token
+```
+
+---
+
+## Libérer de l'espace disque
+
+```powershell
+Remove-Item "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
+npm cache clean --force
+pip cache purge
+```
