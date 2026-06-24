@@ -358,12 +358,17 @@ pre-commit install -c Bonbino-confort-staging/.pre-commit-config-v2.yaml
 ## Pre-commit — Analyser du code
 
 ```bash
-# Lancer l'analyse sur un fichier stagé
-git add fichier_modifie.py
-pre-commit run --config .pre-commit-config-v2.yaml
+# Depuis la racine du projet
+cd C:\Users\TON_NOM\Bureau\TON_REPO
+
+# Stager un fichier
+git add NOM_SOUS_DOSSIER\nom_module\models\fichier.py
+
+# Lancer l'analyse sur les fichiers stagés
+pre-commit run --config NOM_SOUS_DOSSIER\.pre-commit-config-v2.yaml
 
 # Lancer sur tous les fichiers
-pre-commit run --config .pre-commit-config-v2.yaml --all-files
+pre-commit run --config NOM_SOUS_DOSSIER\.pre-commit-config-v2.yaml --all-files
 ```
 
 ---
