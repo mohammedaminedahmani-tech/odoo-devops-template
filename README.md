@@ -18,34 +18,40 @@ Vérifie que tout est installé
 
 git --version
 
-python --version        # 3.10+
+python --version
 
-node --version
-
-claude --version        # Claude Code CLI
-
-docker --version        # Docker Desktop doit être lancé
-
-npm -- version  si c pas installer on lance la commande winget install OpenJS.NodeJS
-
-
+claude --version
 
 Si Claude Code CLI manque :
 
-npm install -g @anthropic-ai/claude-code
+      npm install -g @anthropic-ai/claude-code
 
-et pour la configuration du mcp playwright en local il faut lancer cette commande 
+et pour la configuration du mcp playwright en local il faut lancer cette commande :
 
-claude mcp add playwright npx @playwright/mcp@latest -- --headless
+      claude mcp add playwright npx @playwright/mcp@latest -- --headless
+
+docker --version
+
+npm -- version  
+
+node --version
+
+si c pas installer on lance la commande ca intall npm et node :
+
+      winget install OpenJS.NodeJS
 ________________________________________
 
 # ÉTAPE 1 — Récupérer les tokens
 
 Token Claude Code
 
-claude auth login       # Ouvre le navigateur qui est connecter au claude compte souhaiter— connecte-toi avec
+Se connecter 
+      
+      claude auth login
+      
+Copier code 
 
-claude setup-token      # Affiche ton token dans le meme navigateur  → copie-le
+      claude setup-token
 
 Le token ressemble à : sk-ant-oat01-xxxxxxxxxxxxxxxx
 
@@ -69,63 +75,36 @@ Lance ces commandes dans PowerShell — elles configurent les tokens de façon p
 
 # Permanent (toutes les futures sessions)
 
-$path = "HKCU:\Environment"
+      $path = "HKCU:\Environment"
 
-Set-ItemProperty -Path $path -Name "GITHUB_TOKEN" -Value "ghp_xxxxxxxxxxxxxxxxxxxx"
+      Set-ItemProperty -Path $path -Name "GITHUB_TOKEN" -Value "ghp_xxxxxxxxxxxxxxxxxxxx"
 
-Set-ItemProperty -Path $path -Name "PAT_TOKEN" -Value "ghp_xxxxxxxxxxxxxxxxxxxx"
-
-Set-ItemProperty -Path $path -Name "CLAUDE_CODE_OAUTH_TOKEN" -Value "sk-ant-oat01-xxxxxxxx"
-
-
+      Set-ItemProperty -Path $path -Name "PAT_TOKEN" -Value "ghp_xxxxxxxxxxxxxxxxxxxx"
+      
+      Set-ItemProperty -Path $path -Name "CLAUDE_CODE_OAUTH_TOKEN" -Value "sk-ant-oat01-xxxxxxxx"
 
 # Immédiat (session actuelle)
 
-$env:GITHUB_TOKEN = "ghp_xxxxxxxxxxxxxxxxxxxx"
+      $env:GITHUB_TOKEN = "ghp_xxxxxxxxxxxxxxxxxxxx"
 
-$env:PAT_TOKEN = "ghp_xxxxxxxxxxxxxxxxxxxx"
+      $env:PAT_TOKEN = "ghp_xxxxxxxxxxxxxxxxxxxx"
 
-$env:CLAUDE_CODE_OAUTH_TOKEN = "sk-ant-oat01-xxxxxxxx"
+      $env:CLAUDE_CODE_OAUTH_TOKEN = "sk-ant-oat01-xxxxxxxx"
 
 Vérifie :
 
-echo $env:GITHUB_TOKEN
+      echo $env:GITHUB_TOKEN
 
-echo $env:PAT_TOKEN
+      echo $env:PAT_TOKEN
 
-echo $env:CLAUDE_CODE_OAUTH_TOKEN
+      echo $env:CLAUDE_CODE_OAUTH_TOKEN
 
 Les 3 doivent afficher les tokens.
 
 IMPORTANT : Utilise toujours les 2 blocs ensemble (permanent + immédiat). Le bloc permanent seul ne prend effet qu'au prochain démarrage de VS Code.
-
 ________________________________________
 
-# ÉTAPE 3 — Créer le repo GitHub
-
-1.	Va sur github.com → New repository
-
-2.	Nom : mon-projet-odoo → Private → Create
-
-3.	Push ton code Odoo :
-
-cd "ton-dossier-odoo"
-
-git init
-
-git add .
-
-git commit -m "initial commit"
-
-git branch -M main
-
-git remote add origin https://github.com/TON_ORG/mon-projet-odoo.git
-
-git push -u origin main
-
-________________________________________
-
-# ÉTAPE 4 — Créer les 3 issues GitHub
+# ÉTAPE 3 — Créer les 3 issues GitHub
 
 Dans ton repo → Issues → New issue :
 
@@ -157,13 +136,13 @@ ________________________________________
 
 # ÉTAPE 6 — Lancer le template
 
-cd "C:\Users\TON_NOM\Bureau"
+      cd "C:\Users\TON_NOM\Bureau"
 
-git clone https://github.com/Daisy-Consulting/CI-CD-Claude.git mon-projet-setup mon-projet
+      git clone https://github.com/Daisy-Consulting/CI-CD-Claude.git mon-projet-x
 
-cd mon-projet-setup
+      cd mon-projet-x
 
-python apply_template.py
+      python apply_template.py
 
 Répondre aux questions :
 
@@ -181,7 +160,9 @@ Username Odoo ? ton@email.com
 
 Password Odoo ? ton_mot_de_passe
 
-Version Odoo ? 17 / 18 / 19 pour la base s'il est 18 ou 19 il faut copier la base dans le dossier sinon pour la 17 elle n est pas dispo elle est bipasser
+Version Odoo ? 17 / 18 / 19 
+
+pour la base s'il est 18 ou 19 il faut copier la base dans le dossier sinon pour la 17 elle n est pas dispo elle est bipasser
 
 ________________________________________
 
@@ -201,16 +182,15 @@ on copie manuellement la base s il est dispo
 
 La base doit être à la racine du projet au même niveau que claude_review_v2.py.
 
-
 # Utilisation quotidienne
 
 Pre-commit — Analyser du code
 
-cd "mon-projet-odoo\nom-dossier-modules"
+      cd "mon-projet-odoo\nom-dossier-modules"
 
-git add fichier_modifie.py
+      git add fichier_modifie.py
 
-pre-commit run --config .pre-commit-config-v2.yaml
+      pre-commit run --config .pre-commit-config-v2.yaml
 
 Claude va :
 
@@ -254,27 +234,21 @@ ________________________________________
 
 1. Se reconnecter
 
-claude auth login
+            claude auth login
 
-claude setup-token      # Copie le nouveau token
-
-
+            claude setup-token
 
 2. Mettre à jour partout
 
-$path = "HKCU:\Environment"
+            $path = "HKCU:\Environment"
 
-Set-ItemProperty -Path $path -Name "CLAUDE_CODE_OAUTH_TOKEN" -Value "nouveau_token"
+            Set-ItemProperty -Path $path -Name "CLAUDE_CODE_OAUTH_TOKEN" -Value "nouveau_token"
 
-$env:CLAUDE_CODE_OAUTH_TOKEN = "nouveau_token"
-
-
+            $env:CLAUDE_CODE_OAUTH_TOKEN = "nouveau_token"
 
 3. Mettre à jour le .env
 
 Modifie la ligne CLAUDE_CODE_OAUTH_TOKEN= dans .env
-
-
 
 4. Mettre à jour les secrets GitHub
 
@@ -322,64 +296,54 @@ Token vide dans VS Code	VS Code pas redémarré	Utiliser les 2 blocs permanent +
 
 Collection does not exist	Mauvais chemin ChromaDB	Vérifier que odoo_global_db_18.0/ est à la racine
 
-# Commandes utiles — Claude DevOps Odoo Template
+## Installation (une seule fois) au cas ca a pas telehcarger automatiquement depuis le script
 
----
+Playwright + Chromium
+      
+      npm init -y
+      npm install playwright
+      npx playwright install chromium
 
-## Installation (une seule fois)
-
-```bash
-
-# Claude Code CLI
-npm install -g @anthropic-ai/claude-code
-
-# MCP Playwright
-claude mcp add playwright npx @playwright/mcp@latest -- --headless
-
-# Playwright + Chromium
-npm init -y
-npm install playwright
-npx playwright install chromium
-
-# Installer le hook pre-commit
-pre-commit install -c Bonbino-confort-staging/.pre-commit-config-v2.yaml
-```
-
----
+Installer le hook pre-commit
+      
+      pre-commit install
 
 ## Pre-commit — Analyser du code
 
-```bash
-# Depuis la racine du projet
-cd C:\Users\TON_NOM\Bureau\TON_REPO
+Depuis la racine du projet
+      
+      cd C:\Users\TON_NOM\Bureau\TON_REPO
 
-# Stager un fichier
-git add NOM_SOUS_DOSSIER\nom_module\models\fichier.py
+Stager un fichier ou les fichier souhaiter tester 
 
-# Lancer l'analyse sur les fichiers stagés
-pre-commit run --config NOM_SOUS_DOSSIER\.pre-commit-config-v2.yaml
+      git add NOM_SOUS_DOSSIER\nom_module\models\fichier.py
 
-# Lancer sur tous les fichiers juste pour voir s'il y a des conflit l analyse avec rapport et avec l autre commmande au cas ou on as bzn de lancer sur plusieur module on add plusieur module
-pre-commit run --config NOM_SOUS_DOSSIER\.pre-commit-config-v2.yaml --all-files
-```
+Lancer l'analyse sur les fichiers stagés
 
----
+      pre-commit run --config NOM_SOUS_DOSSIER\.pre-commit-config-v2.yaml
+
+Lancer sur tous les fichiers juste pour voir s'il y a des conflit l analyse avec rapport et avec l autre commmande au cas ou on as bzn de lancer sur plusieur module on add plusieur module
+
+      pre-commit run --config NOM_SOUS_DOSSIER\.pre-commit-config-v2.yaml --all-files
 
 ## E2E Tests — Tester les modules
 
-```bash
-# Lister les modules disponibles
-python e2e.py --list
+Lister les modules disponibles
+      
+      python e2e.py --list
 
-# Tester un module
-python e2e.py --module=nom_module
+Tester un module
+      
+      python e2e.py --module=nom_module
 
-# Tester tous les modules
-python e2e.py --all
+Tester tous les modules
+      
+      python e2e.py --all
 
-# Reposter le dernier rapport sans relancer les tests
-python -c "from e2e import post_last_report; post_last_report()"
-```
+Reposter le dernier rapport sans relancer les tests
+      
+      python -c "from e2e import post_last_report; post_last_report()"
+
 
 ---
 
@@ -404,29 +368,6 @@ git reset HEAD~1
 # Voir les remotes configurés
 git remote -v
 ```
-
----
-
-## Tokens — Mise à jour
-
-```powershell
-# Permanent
-$path = "HKCU:\Environment"
-Set-ItemProperty -Path $path -Name "GITHUB_TOKEN" -Value "ghp_xxx"
-Set-ItemProperty -Path $path -Name "PAT_TOKEN" -Value "ghp_xxx"
-Set-ItemProperty -Path $path -Name "CLAUDE_CODE_OAUTH_TOKEN" -Value "sk-ant-oat01-xxx"
-
-# Immédiat (session actuelle)
-$env:GITHUB_TOKEN = "ghp_xxx"
-$env:PAT_TOKEN = "ghp_xxx"
-$env:CLAUDE_CODE_OAUTH_TOKEN = "sk-ant-oat01-xxx"
-
-# Vérifier
-echo $env:GITHUB_TOKEN
-echo $env:PAT_TOKEN
-echo $env:CLAUDE_CODE_OAUTH_TOKEN
-```
-
 ---
 
 ## Token Claude expiré
@@ -446,58 +387,74 @@ npm cache clean --force
 pip cache purge
 ```
 
-## usuful prompmt to generete CONETEXT.md si t as les droits de creeation de branche
-@claude
+## usuful prompmt to generete CONETEXT.md automatiquement juste en confirmant la PR mais a condition si t as les droits de creeation de branche
+      
+      @claude
+      
+      Lis TOUT le contenu du module `...........` :
+      - __manifest__.py
+      - Tous les fichiers Python dans models/
+      - Tous les fichiers XML dans views/ et reports/
+      - security/ir.model.access.csv
+      - static/ si présent
+      
+      Lis également TOUTES ses dépendances déclarées dans __manifest__.py (depends) :
+      - Pour chaque dépendance custom (pas base/stock/purchase/etc.), lis aussi tous ses fichiers
+      
+      Ensuite génère un fichier CONTEXT.md ultra-complet pour ce module contenant :
+      1. Objectif et description du module
+      2. Liste des dépendances avec leur rôle
+      3. Tous les modèles étendus avec leurs champs ajoutés et méthodes
+      4. Toutes les vues personnalisées avec leurs modifications
+      5. Tous les rapports PDF avec leur contenu
+      6. Les flux de processus complets (sous forme de schémas texte)
+      7. Les points d'attention pour les agents AI
+      8. Les scénarios à tester (max 2, simples et rapides)
+      
+      Le fichier doit être suffisamment détaillé pour qu'un agent AI puisse comprendre et tester ce module sans aucune information supplémentaire.
+      
+      Ensuite :
+      1. Crée une branche
+      2. Remplace le contenu de par le contenu généré
+      3. Crée un Pull Request vers `test`
 
-Lis TOUT le contenu du module `[NOM_MODULE]` :
-- __manifest__.py
-- Tous les fichiers Python dans models/
-- Tous les fichiers XML dans views/ et reports/
-- security/ir.model.access.csv
-- static/ si présent
-
-Lis également TOUTES ses dépendances déclarées dans __manifest__.py (depends) :
-- Pour chaque dépendance custom (pas base/stock/purchase/etc.), lis aussi tous ses fichiers
-
-Ensuite génère un fichier CONTEXT.md ultra-complet pour ce module contenant :
-1. Objectif et description du module
-2. Liste des dépendances avec leur rôle
-3. Tous les modèles étendus avec leurs champs ajoutés et méthodes
-4. Toutes les vues personnalisées avec leurs modifications
-5. Tous les rapports PDF avec leur contenu
-6. Les flux de processus complets (sous forme de schémas texte)
-7. Les points d'attention pour les agents AI
-8. Les scénarios à tester (max 2, simples et rapides)
-
-Le fichier doit être suffisamment détaillé pour qu'un agent AI puisse comprendre et tester ce module sans aucune information supplémentaire.
-
-Ensuite :
-1. Crée une branche `doc/[NOM_MODULE]-context`
-2. Remplace le contenu de `Bonbino-confort-staging/[NOM_MODULE]/CONTEXT.md` par le contenu généré
-3. Crée un Pull Request vers `main` avec le titre `doc: CONTEXT.md [NOM_MODULE]`
 
 
+## usuful prompmt to generete CONETEXT.md version copier coller si t as pas les droits de creeation de branche
+      
+      @claude
+      
+      Lis TOUT le contenu du module .............; :
+      
+      manifest.py
+      Tous les fichiers Python dans models/
+      Tous les fichiers XML dans views/ et reports/
+      security/ir.model.access.csv
+      static/ si présent
+      Lis également TOUTES ses dépendances déclarées dans manifest.py (depends) :
+      
+      Pour chaque dépendance custom (pas base/stock/purchase/etc.), lis aussi tous ses fichiers
+      ensuite repond moi ici avec le contenue du fichier dont je peus copier coller sans aucun creation je veu que la reponse sois en message et je copis colle                   manuellement ce fichier contient :
+      Objectif et description du module
+      Liste des dépendances avec leur rôle
+      Tous les modèles étendus avec leurs champs ajoutés et méthodes
+      Toutes les vues personnalisées avec leurs modifications
+      Tous les rapports PDF avec leur contenu
+      Les flux de processus complets (sous forme de schémas texte)
+      Les points d'attention pour les agents AI
+      Les scénarios à tester (max 2, simples et rapides)
+      Le fichier doit être suffisamment détaillé pour qu'un agent AI puisse comprendre et tester ce module sans aucune information supplémentaire.
 
-## usuful prompmt to generete CONETEXT.md si t as pas les droits de creeation de branche
-@claude
+## usuful prompmt to generete CONETEXT.md version interaction humain afin d avoir une bonne comprehension et il n invente pas des choses qui n existe pas vraiment ajuster pour les 2 mode avec droit de cration de branche ou sans 
 
-Lis TOUT le contenu du module hr_payroll_community :
-
-manifest.py
-Tous les fichiers Python dans models/
-Tous les fichiers XML dans views/ et reports/
-security/ir.model.access.csv
-static/ si présent
-Lis également TOUTES ses dépendances déclarées dans manifest.py (depends) :
-
-Pour chaque dépendance custom (pas base/stock/purchase/etc.), lis aussi tous ses fichiers
-ensuite repond moi ici avec le contenue du fichier dont je peus copier coller sans aucun creation je veu que la reponse sois en message et je copis colle manuellement ce fichier contient :
-Objectif et description du module
-Liste des dépendances avec leur rôle
-Tous les modèles étendus avec leurs champs ajoutés et méthodes
-Toutes les vues personnalisées avec leurs modifications
-Tous les rapports PDF avec leur contenu
-Les flux de processus complets (sous forme de schémas texte)
-Les points d'attention pour les agents AI
-Les scénarios à tester (max 2, simples et rapides)
-Le fichier doit être suffisamment détaillé pour qu'un agent AI puisse comprendre et tester ce module sans aucune information supplémentaire.
+      @claude
+      Lis TOUT le contenu du module...
+      (ta commande actuelle)
+      
+      Ensuite, AVANT de générer le CONTEXT.md :
+      1. Liste les points que tu n'es pas sûr de comprendre
+      2. Pose-moi maximum 5 questions sur les comportements métier
+      3. Attends mes réponses
+      4. Génère le CONTEXT.md final
+      
+            
