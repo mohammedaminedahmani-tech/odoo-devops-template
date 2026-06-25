@@ -10,11 +10,11 @@ Ce que fait ce système
 
 ________________________________________
 
-Prérequis obligatoires
+# Prérequis obligatoires
 
 Installe ces outils avant de commencer :
 
-# Vérifie que tout est installé
+Vérifie que tout est installé
 
 git --version
 
@@ -26,19 +26,26 @@ claude --version        # Claude Code CLI
 
 docker --version        # Docker Desktop doit être lancé
 
+npm -- version  si c pas installer on lance la commande winget install OpenJS.NodeJS
+
+
+
 Si Claude Code CLI manque :
 
 npm install -g @anthropic-ai/claude-code
 
+et pour la configuration du mcp playwright en local il faut lancer cette commande 
+
+claude mcp add playwright npx @playwright/mcp@latest -- --headless
 ________________________________________
 
-ÉTAPE 1 — Récupérer les tokens
+# ÉTAPE 1 — Récupérer les tokens
 
 Token Claude Code
 
-claude auth login       # Ouvre le navigateur — connecte-toi
+claude auth login       # Ouvre le navigateur qui est connecter au claude compte souhaiter— connecte-toi avec
 
-claude setup-token      # Affiche ton token → copie-le
+claude setup-token      # Affiche ton token dans le meme navigateur  → copie-le
 
 Le token ressemble à : sk-ant-oat01-xxxxxxxxxxxxxxxx
 
@@ -56,7 +63,7 @@ Le token ressemble à : ghp_xxxxxxxxxxxxxxxxxxxx
 
 ________________________________________
 
-ÉTAPE 2 — Configurer les tokens (une seule fois par PC)
+# ÉTAPE 2 — Configurer les tokens (une seule fois par PC)
 
 Lance ces commandes dans PowerShell — elles configurent les tokens de façon permanente ET immédiate :
 
@@ -94,7 +101,7 @@ IMPORTANT : Utilise toujours les 2 blocs ensemble (permanent + immédiat). Le bl
 
 ________________________________________
 
-ÉTAPE 3 — Créer le repo GitHub
+# ÉTAPE 3 — Créer le repo GitHub
 
 1.	Va sur github.com → New repository
 
@@ -118,11 +125,11 @@ git push -u origin main
 
 ________________________________________
 
-ÉTAPE 4 — Créer les 3 issues GitHub
+# ÉTAPE 4 — Créer les 3 issues GitHub
 
 Dans ton repo → Issues → New issue :
 
-#	Titre
+Titre
 
 #1	Claude Review — Rapports d'analyse
 
@@ -134,7 +141,7 @@ Les numéros doivent être exactement #1, #2, #3 dans cet ordre.
 
 ________________________________________
 
-ÉTAPE 5 — Configurer les secrets GitHub
+# ÉTAPE 5 — Configurer les secrets GitHub
 
 Dans ton repo → Settings → Secrets and variables → Actions → New repository secret :
 
@@ -148,11 +155,11 @@ GITHUB_TOKEN est automatique — ne pas l'ajouter.
 
 ________________________________________
 
-ÉTAPE 6 — Lancer le template
+# ÉTAPE 6 — Lancer le template
 
 cd "C:\Users\TON_NOM\Bureau"
 
-git clone https://github.com/mohammedaminedahmani-tech/odoo-devops-template.git mon-projet-setup
+git clone https://github.com/Daisy-Consulting/CI-CD-Claude.git mon-projet-setup mon-projet
 
 cd mon-projet-setup
 
@@ -164,7 +171,7 @@ GitHub repo ? TON_ORG/mon-projet-odoo
 
 Dossier parent ? C:\Users\TON_NOM\Bureau
 
-Sous-dossier modules ? nom-du-dossier-modules
+Sous-dossier modules ? nom-du-dossier-modules s il n existe pas c lieu de le creer dans afin de ne rien modifier cote cote sinon il faut supprimer / danss tous les modules creer automatique de e2e.py
 
 URL Odoo ? https://ton-instance.dev.odoo.com
 
@@ -174,41 +181,28 @@ Username Odoo ? ton@email.com
 
 Password Odoo ? ton_mot_de_passe
 
-Version Odoo ? 17 / 18 / 19
+Version Odoo ? 17 / 18 / 19 pour la base s'il est 18 ou 19 il faut copier la base dans le dossier sinon pour la 17 elle n est pas dispo elle est bipasser
 
 ________________________________________
 
-ÉTAPE 7 — Créer le fichier .env
+# ÉTAPE 7 — Créer le fichier .env
 
 Dans la racine du projet (ex: Bureau/mon-projet-odoo/) crée .env :
 
-GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
+copier le contenu de .env.exemple et remplire les donne 
 
-ODOO_URL=https://ton-instance.dev.odoo.com
-
-ODOO_DB=nom-de-ta-base
-
-ODOO_USERNAME=ton@email.com
-
-ODOO_PASSWORD=ton_mot_de_passe
-
-CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-xxxxxxxx
-
-PAT_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
-
-Ne jamais pusher ce fichier — il est déjà dans .gitignore.
+ne jmais pusher ce fichier il est dans git ignore
 
 ________________________________________
 
-ÉTAPE 8 — Copier la base ChromaDB
+# ÉTAPE 8 — Copier la base ChromaDB
 
-Copy-Item -Recurse "chemin\vers\odoo_global_db_18.0" "C:\Users\TON_NOM\Bureau\mon-projet-odoo\odoo_global_db_18.0"
+on copie manuellement la base s il est dispo
 
 La base doit être à la racine du projet au même niveau que claude_review_v2.py.
 
-Final = claude mcp add playwright npx @playwright/mcp@latest -- --headless
 
-Utilisation quotidienne
+# Utilisation quotidienne
 
 Pre-commit — Analyser du code
 
@@ -230,9 +224,11 @@ Claude va :
 
 5.	Poster le rapport dans l'issue #1
 
+NB = au cas ou on veut tester plusieur module on peus il faut juste add tous les fichier souhaiter et add pre-commit_v2.py aussi
+
 @claude — Poser une question dans GitHub
 
-Dans n'importe quelle issue → nouveau commentaire :
+Dans l'issue  2 chat expert → nouveau commentaire :
 
 @claude explique-moi ce module
 
@@ -242,9 +238,7 @@ Dans n'importe quelle issue → nouveau commentaire :
 
 ________________________________________
 
-Ce qu'il faut éviter
-
-•	❌ Ne jamais stager claude_review_v2.py avec tes fichiers Odoo
+# Ce qu'il faut éviter
 
 •	❌ Ne jamais pusher le fichier .env
 
@@ -256,9 +250,9 @@ Ce qu'il faut éviter
 
 ________________________________________
 
-Que faire si le token expire ?
+# Que faire si le token expire ?
 
-# 1. Se reconnecter
+1. Se reconnecter
 
 claude auth login
 
@@ -266,7 +260,7 @@ claude setup-token      # Copie le nouveau token
 
 
 
-# 2. Mettre à jour partout
+2. Mettre à jour partout
 
 $path = "HKCU:\Environment"
 
@@ -276,19 +270,19 @@ $env:CLAUDE_CODE_OAUTH_TOKEN = "nouveau_token"
 
 
 
-# 3. Mettre à jour le .env
+3. Mettre à jour le .env
 
-# Modifie la ligne CLAUDE_CODE_OAUTH_TOKEN= dans .env
+Modifie la ligne CLAUDE_CODE_OAUTH_TOKEN= dans .env
 
 
 
-# 4. Mettre à jour les secrets GitHub
+4. Mettre à jour les secrets GitHub
 
-# Settings → Secrets → CLAUDE_CODE_OAUTH_TOKEN → Update
+Settings → Secrets → CLAUDE_CODE_OAUTH_TOKEN → Update
 
 ________________________________________
 
-Checklist finale avant de commencer
+# Checklist finale avant de commencer
 
 •	[ ] Git, Python, Node.js, Claude Code CLI, Docker installés
 
@@ -312,7 +306,7 @@ Checklist finale avant de commencer
 
 ________________________________________
 
-Erreurs fréquentes et solutions
+# Erreurs fréquentes et solutions
 
 Erreur	Cause	Solution
 
@@ -335,8 +329,6 @@ Collection does not exist	Mauvais chemin ChromaDB	Vérifier que odoo_global_db_1
 ## Installation (une seule fois)
 
 ```bash
-# Dépendances Python
-pip install -r requirements.txt
 
 # Claude Code CLI
 npm install -g @anthropic-ai/claude-code
@@ -367,7 +359,7 @@ git add NOM_SOUS_DOSSIER\nom_module\models\fichier.py
 # Lancer l'analyse sur les fichiers stagés
 pre-commit run --config NOM_SOUS_DOSSIER\.pre-commit-config-v2.yaml
 
-# Lancer sur tous les fichiers
+# Lancer sur tous les fichiers juste pour voir s'il y a des conflit l analyse avec rapport et avec l autre commmande au cas ou on as bzn de lancer sur plusieur module on add plusieur module
 pre-commit run --config NOM_SOUS_DOSSIER\.pre-commit-config-v2.yaml --all-files
 ```
 
@@ -454,7 +446,7 @@ npm cache clean --force
 pip cache purge
 ```
 
-## usuful prompmt to generete CONETEXT.md
+## usuful prompmt to generete CONETEXT.md si t as les droits de creeation de branche
 @claude
 
 Lis TOUT le contenu du module `[NOM_MODULE]` :
@@ -483,3 +475,29 @@ Ensuite :
 1. Crée une branche `doc/[NOM_MODULE]-context`
 2. Remplace le contenu de `Bonbino-confort-staging/[NOM_MODULE]/CONTEXT.md` par le contenu généré
 3. Crée un Pull Request vers `main` avec le titre `doc: CONTEXT.md [NOM_MODULE]`
+
+
+
+## usuful prompmt to generete CONETEXT.md si t as pas les droits de creeation de branche
+@claude
+
+Lis TOUT le contenu du module hr_payroll_community :
+
+manifest.py
+Tous les fichiers Python dans models/
+Tous les fichiers XML dans views/ et reports/
+security/ir.model.access.csv
+static/ si présent
+Lis également TOUTES ses dépendances déclarées dans manifest.py (depends) :
+
+Pour chaque dépendance custom (pas base/stock/purchase/etc.), lis aussi tous ses fichiers
+ensuite repond moi ici avec le contenue du fichier dont je peus copier coller sans aucun creation je veu que la reponse sois en message et je copis colle manuellement ce fichier contient :
+Objectif et description du module
+Liste des dépendances avec leur rôle
+Tous les modèles étendus avec leurs champs ajoutés et méthodes
+Toutes les vues personnalisées avec leurs modifications
+Tous les rapports PDF avec leur contenu
+Les flux de processus complets (sous forme de schémas texte)
+Les points d'attention pour les agents AI
+Les scénarios à tester (max 2, simples et rapides)
+Le fichier doit être suffisamment détaillé pour qu'un agent AI puisse comprendre et tester ce module sans aucune information supplémentaire.
