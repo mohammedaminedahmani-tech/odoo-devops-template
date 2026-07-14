@@ -10,6 +10,9 @@ TEMPLATE_REPO = "https://github.com/mohammedaminedahmani-tech/odoo-devops-templa
 FICHIERS_RACINE = [
     "claude_review_v2.py",
     "e2e.py",
+    # ── Systeme E2E v2 (Contrat + pistes + formulaire) ──
+    "e2e_v2.py",
+    "ast_tool.py",
     "requirements.txt",
     "projet.md",
     ".env.example",
@@ -55,7 +58,27 @@ def main():
     odoo_db      = input("   DB Odoo ? ").strip()
     odoo_user    = input("   Username Odoo ? ").strip()
     odoo_pass    = input("   Password Odoo ? ").strip()
-    odoo_ver     = input("   Version Odoo (17/18/19) ? ").strip()
+    odoo_ver      = input("   Version Odoo (17/18/19) ? ").strip()
+
+    # ── Questions specifiques au systeme E2E v2 ───────────────────────────
+    issue_v2 = input("   Numéro d'issue GitHub pour les rapports E2E v2 ? ").strip()
+    if not issue_v2:
+        issue_v2 = "1"
+    app_mobile_rep = input("   Ce projet a-t-il une API mobile à tester (RPC) ? (oui/NON) ").strip().lower()
+    test_api_mobile = "true" if app_mobile_rep in ("oui", "o", "yes", "y") else "false"
+    print(f"   → TEST_API_MOBILE = {test_api_mobile}")
+
+    target_branch = input("   Branche cible (ex: test, staging, dev...) ? ").strip()
+    if not target_branch:
+        print("   ❌ Branche obligatoire — relance le script.")
+        sys.exit(1)
+
+    # ── GARDE-FOU BRANCHE ─────────────────────────────────────────────────
+    if target_branch in ("main", "master"):
+        confirm = input(f"\n   ⚠️  Tu vas pousser sur '{target_branch}' — confirme (oui/NON) ? ").strip().lower()
+        if confirm != "oui":
+            print("   ❌ Annulé.")
+            sys.exit(0)
 
     repo_name   = github_repo.split("/")[-1]
     project_dir = os.path.join(clone_parent, repo_name)
@@ -75,7 +98,7 @@ def main():
     # ── 1b. .gitignore — AVANT tout git add ───────────────────────────────
     print("\n📝 Mise à jour .gitignore...")
     gitignore_path = os.path.join(project_dir, ".gitignore")
-    entries_a_ajouter = ["odoo_global_db_*/", "chroma.sqlite3", "_template_tmp/"]
+    entries_a_ajouter = ["odoo_global_db_*/", "chroma.sqlite3", "_template_tmp/", ".env"]
     lignes_existantes = set()
     if os.path.exists(gitignore_path):
         with open(gitignore_path, encoding="utf-8") as f:
@@ -213,6 +236,62 @@ def main():
             f.write(content)
         print(f"   ✅ e2e.py configuré ({len(modules_dict)} modules détectés)")
 
+    # ── 6b. Configuration e2e_v2.py (systeme Contrat + pistes) ────────────
+    # Meme principe que e2e.py : on remplace les valeurs par defaut par les
+    # reponses saisies. Les variables du .py sont ecrites en dur comme valeurs
+    # par defaut de os.environ.get(...), on remplace donc ces defauts.
+    print("\n⚙️  Configuration e2e_v2.py...")
+    e2e_v2_path = os.path.join(project_dir, "e2e_v2.py")
+    if os.path.exists(e2e_v2_path):
+        with open(e2e_v2_path, encoding="utf-8") as f:
+            content = f.read()
+
+        url_final = odoo_url if odoo_url.endswith('/') else odoo_url + '/'
+
+        # GITHUB_REPO (valeur par defaut dans os.environ.get)
+        content = content.replace(
+            'GITHUB_REPO = os.environ.get("GITHUB_REPO", "Daisy-Consulting/shoorah_test")',
+            f'GITHUB_REPO = os.environ.get("GITHUB_REPO", "{github_repo}")'
+        )
+        # GITHUB_ISSUE_NUMBER
+        content = content.replace(
+            'GITHUB_ISSUE_NUMBER = int(os.environ.get("GITHUB_ISSUE_NUMBER", "6"))',
+            f'GITHUB_ISSUE_NUMBER = int(os.environ.get("GITHUB_ISSUE_NUMBER", "{issue_v2}"))'
+        )
+        # ODOO_URL
+        content = content.replace(
+            'ODOO_URL = os.environ.get("ODOO_URL", "http://185.158.132.243:9019/")',
+            f'ODOO_URL = os.environ.get("ODOO_URL", "{url_final}")'
+        )
+        # ODOO_DB
+        content = content.replace(
+            'ODOO_DB = os.environ.get("ODOO_DB", "SHOORAH_TEST_2026-07-01_16-07-52")',
+            f'ODOO_DB = os.environ.get("ODOO_DB", "{odoo_db}")'
+        )
+        # ODOO_EMAIL
+        content = content.replace(
+            'ODOO_EMAIL = os.environ.get("ODOO_EMAIL", "admin@shoorah")',
+            f'ODOO_EMAIL = os.environ.get("ODOO_EMAIL", "{odoo_user}")'
+        )
+        # TEST_API_MOBILE (mobile / pas mobile)
+        content = content.replace(
+            'TEST_API_MOBILE = os.environ.get("TEST_API_MOBILE", "false").lower() == "true"',
+            f'TEST_API_MOBILE = os.environ.get("TEST_API_MOBILE", "{test_api_mobile}").lower() == "true"'
+        )
+
+        with open(e2e_v2_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        print(f"   ✅ e2e_v2.py configuré (issue #{issue_v2}, TEST_API_MOBILE={test_api_mobile})")
+    else:
+        print("   ⚠️  e2e_v2.py introuvable dans le template — vérifie qu'il y est ajouté")
+
+    # ── 6c. Rappel ast_tool.py (copie telle quelle, aucune config) ────────
+    ast_path = os.path.join(project_dir, "ast_tool.py")
+    if os.path.exists(ast_path):
+        print("   ✅ ast_tool.py présent (aucune configuration nécessaire)")
+    else:
+        print("   ⚠️  ast_tool.py introuvable — le débogage E2E v2 ne marchera pas")
+
     # ── 7. Créer les CONTEXT.md vides pour chaque module ─────────────────
     print("\n📝 Création des CONTEXT.md...")
     context_template = """# CONTEXT.md — {module}
@@ -254,25 +333,37 @@ def main():
 
     # ── 10. Installation Playwright ───────────────────────────────────────
     print("\n📦 Installation Playwright...")
+    run("npm init -y", cwd=project_dir, ignore_error=True)
     run("npm install playwright --legacy-peer-deps", cwd=project_dir, ignore_error=True)
     run("npx playwright install chromium", cwd=project_dir, ignore_error=True)
     print("   ✅ Playwright installé")
 
     # ── 11. Push ──────────────────────────────────────────────────────────
-    print("\n🚀 Push vers GitHub...")
+    print(f"\n🚀 Push vers GitHub — branche : {target_branch}...")
 
-    # Annuler les commits locaux non pushés (cas d'un run précédent raté)
-    subprocess.run(
-        'git reset origin/main',
+    # Checkout la branche cible (la créer si elle n'existe pas)
+    branch_exists = subprocess.run(
+        f'git ls-remote --heads origin {target_branch}',
         shell=True, cwd=project_dir, capture_output=True, text=True
-    )
+    ).stdout.strip()
+
+    if branch_exists:
+        run(f'git fetch origin {target_branch}', cwd=project_dir, ignore_error=True)
+        run(f'git checkout {target_branch}', cwd=project_dir, ignore_error=True)
+        subprocess.run(
+            f'git reset origin/{target_branch}',
+            shell=True, cwd=project_dir, capture_output=True, text=True
+        )
+    else:
+        print(f"   ⚠️  Branche '{target_branch}' inexistante — création...")
+        run(f'git checkout -b {target_branch}', cwd=project_dir, ignore_error=True)
 
     run("git add .", cwd=target)
     run('git commit -m "chore: apply odoo-devops-template"', cwd=target, ignore_error=True)
     run("git add .", cwd=project_dir, ignore_error=True)
     run('git commit -m "chore: add root devops files"', cwd=project_dir, ignore_error=True)
-    run("git push --force-with-lease", cwd=project_dir, ignore_error=True)
-    print("   ✅ Push effectué")
+    run(f"git push --force-with-lease origin {target_branch}", cwd=project_dir, ignore_error=True)
+    print(f"   ✅ Push effectué sur '{target_branch}'")
 
     # ── 12. Auto-suppression du script ────────────────────────────────────
     print("\n🗑️  Suppression du script apply_template.py...")
@@ -285,10 +376,13 @@ def main():
     print("=" * 60)
     print("\n📌 Étapes manuelles restantes :")
     print("   1. Copie ta base ChromaDB odoo_global_db/ dans le projet")
-    print("   2. Ajoute les secrets GitHub (CLAUDE_CODE_OAUTH_TOKEN, PAT_TOKEN)")
-    print("   3. Crée les issues GitHub #1, #2, #3")
+    print("   2. Ajoute les secrets GitHub :")
+    print("      - CLAUDE_CODE_OAUTH_TOKEN, PAT_TOKEN, ODOO_PASSWORD")
+    print("      - NGROK_AUTHTOKEN (formulaire E2E v2)")
+    print("      - MONITOR_WEBHOOK_URL (si notif monitoring activée)")
+    print("   3. Crée les issues GitHub nécessaires (dont #%s pour E2E v2)" % issue_v2)
     print("   4. Crée le fichier .env avec tes credentials")
-    print("   5. Remplis les CONTEXT.md de chaque module pour les tests E2E")
+    print("   5. Remplis les CONTEXT.md de chaque module pour les tests E2E (v1)")
     print("   6. Remplis SETUP.md avec ton cahier des charges")
     print("=" * 60)
 
