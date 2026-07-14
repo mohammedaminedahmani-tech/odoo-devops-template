@@ -642,15 +642,14 @@ def construire_prompt_scenarios(module_name, contrat, reponses):
     """
     contrat_json = json.dumps(contrat, indent=2, ensure_ascii=False)
 
-    # ── Detecter les pistes choisies (section ajoutee par le formulaire) ──────
+   # ── Detecter les pistes choisies (section ajoutee par le formulaire) ──────
     pistes_choisies = ""
     if reponses and "=== PISTES CHOISIES ===" in reponses:
         apres = reponses.split("=== PISTES CHOISIES ===", 1)[1]
-        # On prend la 1re ligne non vide qui suit le marqueur.
-        for ligne in apres.splitlines():
-            if ligne.strip():
-                pistes_choisies = ligne.strip()
-                break
+        # On prend TOUTES les lignes non vides (une piste cochee peut etre
+        # sur sa propre ligne quand plusieurs pistes sont selectionnees).
+        lignes_pistes = [l.strip() for l in apres.splitlines() if l.strip()]
+        pistes_choisies = ", ".join(lignes_pistes)
 
     bloc_reponses = ""
     if reponses:
