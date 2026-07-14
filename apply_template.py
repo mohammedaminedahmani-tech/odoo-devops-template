@@ -45,6 +45,18 @@ def run(cmd, cwd=None, ignore_error=False):
         sys.exit(1)
 
 
+def replace_or_warn(content, old, new, label):
+    """Remplace `old` par `new` dans content. Si `old` est introuvable,
+    affiche un avertissement au lieu d'echouer silencieusement (protege
+    contre une derive silencieuse si le template par defaut change un jour)."""
+    if old not in content:
+        print(f"   ⚠️  ATTENTION : motif introuvable pour '{label}' — "
+              f"la config par défaut du template a peut-être changé, "
+              f"vérifie {label} à la main dans le fichier généré.")
+        return content
+    return content.replace(old, new)
+
+
 def main():
     print("=" * 60)
     print("   Odoo DevOps Template — Installation automatique")
@@ -159,30 +171,45 @@ def main():
     if os.path.exists(review_path):
         with open(review_path, encoding="utf-8") as f:
             content = f.read()
-        content = content.replace(
+        content = replace_or_warn(
+            content,
             'GITHUB_REPO = "mohammedaminedahmani-tech/extraplast_modules"',
-            f'GITHUB_REPO = "{github_repo}"'
+            f'GITHUB_REPO = "{github_repo}"',
+            "GITHUB_REPO (claude_review_v2.py)"
         )
-        content = content.replace(
+        content = replace_or_warn(
+            content,
             '"https://daisy-consulting-extrat-plast7-test-33133732.dev.odoo.com"',
-            f'"{odoo_url}"'
+            f'"{odoo_url}"',
+            "ODOO_URL (claude_review_v2.py)"
         )
-        content = content.replace(
+        content = replace_or_warn(
+            content,
             '"daisy-consulting-extrat-plast7-test-33133732"',
-            f'"{odoo_db}"'
+            f'"{odoo_db}"',
+            "ODOO_DB (claude_review_v2.py)"
         )
-        content = content.replace(
+        content = replace_or_warn(
+            content,
             '"im-it@daisyconsulting.ma"',
-            f'"{odoo_user}"'
+            f'"{odoo_user}"',
+            "ODOO_EMAIL (claude_review_v2.py)"
         )
-        content = content.replace(
+        content = replace_or_warn(
+            content,
             'ODOO_PASSWORD = os.environ.get("ODOO_PASSWORD", "odoo")',
-            f'ODOO_PASSWORD = os.environ.get("ODOO_PASSWORD", "{odoo_pass}")'
+            f'ODOO_PASSWORD = os.environ.get("ODOO_PASSWORD", "{odoo_pass}")',
+            "ODOO_PASSWORD (claude_review_v2.py)"
         )
-        content = content.replace("Odoo 19", f"Odoo {odoo_ver}")
-        content = content.replace(
+        content = replace_or_warn(
+            content, "Odoo 19", f"Odoo {odoo_ver}",
+            "version Odoo (claude_review_v2.py)"
+        )
+        content = replace_or_warn(
+            content,
             '"odoo_global_db"',
-            f'"odoo_global_db_{odoo_ver}.0"'
+            f'"odoo_global_db_{odoo_ver}.0"',
+            "odoo_global_db (claude_review_v2.py)"
         )
         with open(review_path, "w", encoding="utf-8") as f:
             f.write(content)
@@ -196,21 +223,29 @@ def main():
             content = f.read()
 
         # Remplacer repo et URL
-        content = content.replace(
+        content = replace_or_warn(
+            content,
             "mohammedaminedahmani-tech/extraplast_modules",
-            github_repo
+            github_repo,
+            "GITHUB_REPO (e2e.py)"
         )
-        content = content.replace(
+        content = replace_or_warn(
+            content,
             "https://daisy-consulting-extrat-plast7-test-33773518.dev.odoo.com/",
-            odoo_url if odoo_url.endswith('/') else odoo_url + '/'
+            odoo_url if odoo_url.endswith('/') else odoo_url + '/',
+            "ODOO_URL (e2e.py)"
         )
-        content = content.replace(
+        content = replace_or_warn(
+            content,
             '"im-it@daisyconsulting.ma"',
-            f'"{odoo_user}"'
+            f'"{odoo_user}"',
+            "ODOO_EMAIL (e2e.py)"
         )
-        content = content.replace(
+        content = replace_or_warn(
+            content,
             'os.environ.get("ODOO_PASSWORD", "odoo")',
-            f'os.environ.get("ODOO_PASSWORD", "{odoo_pass}")'
+            f'os.environ.get("ODOO_PASSWORD", "{odoo_pass}")',
+            "ODOO_PASSWORD (e2e.py)"
         )
 
         # Auto-générer MODULES depuis les dossiers du projet
@@ -230,7 +265,10 @@ def main():
             modules_str += f"    }},\n"
         modules_str += "}"
 
-        content = content.replace("MODULES = {}", modules_str)
+        content = replace_or_warn(
+            content, "MODULES = {}", modules_str,
+            "MODULES (e2e.py)"
+        )
 
         with open(e2e_path, "w", encoding="utf-8") as f:
             f.write(content)
@@ -249,34 +287,46 @@ def main():
         url_final = odoo_url if odoo_url.endswith('/') else odoo_url + '/'
 
         # GITHUB_REPO (valeur par defaut dans os.environ.get)
-        content = content.replace(
+        content = replace_or_warn(
+            content,
             'GITHUB_REPO = os.environ.get("GITHUB_REPO", "Daisy-Consulting/shoorah_test")',
-            f'GITHUB_REPO = os.environ.get("GITHUB_REPO", "{github_repo}")'
+            f'GITHUB_REPO = os.environ.get("GITHUB_REPO", "{github_repo}")',
+            "GITHUB_REPO (e2e_v2.py)"
         )
         # GITHUB_ISSUE_NUMBER
-        content = content.replace(
+        content = replace_or_warn(
+            content,
             'GITHUB_ISSUE_NUMBER = int(os.environ.get("GITHUB_ISSUE_NUMBER", "6"))',
-            f'GITHUB_ISSUE_NUMBER = int(os.environ.get("GITHUB_ISSUE_NUMBER", "{issue_v2}"))'
+            f'GITHUB_ISSUE_NUMBER = int(os.environ.get("GITHUB_ISSUE_NUMBER", "{issue_v2}"))',
+            "GITHUB_ISSUE_NUMBER (e2e_v2.py)"
         )
         # ODOO_URL
-        content = content.replace(
+        content = replace_or_warn(
+            content,
             'ODOO_URL = os.environ.get("ODOO_URL", "http://185.158.132.243:9019/")',
-            f'ODOO_URL = os.environ.get("ODOO_URL", "{url_final}")'
+            f'ODOO_URL = os.environ.get("ODOO_URL", "{url_final}")',
+            "ODOO_URL (e2e_v2.py)"
         )
         # ODOO_DB
-        content = content.replace(
+        content = replace_or_warn(
+            content,
             'ODOO_DB = os.environ.get("ODOO_DB", "SHOORAH_TEST_2026-07-01_16-07-52")',
-            f'ODOO_DB = os.environ.get("ODOO_DB", "{odoo_db}")'
+            f'ODOO_DB = os.environ.get("ODOO_DB", "{odoo_db}")',
+            "ODOO_DB (e2e_v2.py)"
         )
         # ODOO_EMAIL
-        content = content.replace(
+        content = replace_or_warn(
+            content,
             'ODOO_EMAIL = os.environ.get("ODOO_EMAIL", "admin@shoorah")',
-            f'ODOO_EMAIL = os.environ.get("ODOO_EMAIL", "{odoo_user}")'
+            f'ODOO_EMAIL = os.environ.get("ODOO_EMAIL", "{odoo_user}")',
+            "ODOO_EMAIL (e2e_v2.py)"
         )
         # TEST_API_MOBILE (mobile / pas mobile)
-        content = content.replace(
+        content = replace_or_warn(
+            content,
             'TEST_API_MOBILE = os.environ.get("TEST_API_MOBILE", "false").lower() == "true"',
-            f'TEST_API_MOBILE = os.environ.get("TEST_API_MOBILE", "{test_api_mobile}").lower() == "true"'
+            f'TEST_API_MOBILE = os.environ.get("TEST_API_MOBILE", "{test_api_mobile}").lower() == "true"',
+            "TEST_API_MOBILE (e2e_v2.py)"
         )
 
         with open(e2e_v2_path, "w", encoding="utf-8") as f:
@@ -373,11 +423,16 @@ def main():
               f"vérifie tes accès/credentials git puis relance le push manuellement :")
         print(f"      cd \"{project_dir}\" && git push --force-with-lease origin {target_branch}")
 
-    # ── 12. Auto-suppression du script ────────────────────────────────────
-    print("\n🗑️  Suppression du script apply_template.py...")
-    script_path = os.path.abspath(__file__)
-    os.remove(script_path)
-    print("   ✅ Script supprimé")
+    # ── 12. Auto-suppression du script (seulement si le push a réussi) ────
+    if push_result.returncode == 0:
+        print("\n🗑️  Suppression du script apply_template.py...")
+        script_path = os.path.abspath(__file__)
+        os.remove(script_path)
+        print("   ✅ Script supprimé")
+    else:
+        print("\n⚠️  Script apply_template.py CONSERVÉ (le push a échoué) —")
+        print("   corrige le problème puis relance le push manuellement, ou")
+        print("   relance ce script depuis le début si besoin.")
 
     print("\n" + "=" * 60)
     print("✅ Installation terminée !")
