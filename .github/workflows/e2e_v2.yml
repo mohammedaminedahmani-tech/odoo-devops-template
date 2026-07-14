@@ -1,0 +1,257 @@
+name: 🔬 E2E v2 — Contrat + Formulaire + Playwright
+
+on:
+  workflow_dispatch:
+    inputs:
+      module:
+        description: 'Module à tester (ex: hr_shoorah_demande)'
+        required: true
+        type: string
+      repondre_questions:
+        description: 'Répondre aux questions de Claude avant les tests ? (ouvre un formulaire)'
+        required: false
+        type: boolean
+        default: true
+      regenerer_contrat:
+        description: 'Régénérer le Contrat ? (décoche si le module n''a PAS changé, pour économiser)'
+        required: false
+        type: boolean
+        default: true
+      priorite_seulement:
+        description: 'Tester seulement l''important ?'
+        required: false
+        type: boolean
+        default: true
+      max_scenarios:
+        description: 'Plafond du nombre de scénarios exécutés (0 = pas de limite)'
+        required: false
+        type: string
+        default: '0'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  e2e_v2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360   # 6h = plafond dur des runners GitHub-hosted
+
+    # NOTE : la config (repo, issue, URL, DB, email, TEST_API_MOBILE) est fournie
+    # par e2e_v2.py (valeurs configurées par apply_template.py lors de l'install).
+    # Aucune valeur de projet en dur ici : ce workflow reste generique/reutilisable.
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install Python dependencies
+        run: pip install requests python-dotenv pyyaml
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 🤖 Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: 🎭 Add MCP Playwright to Claude
+        run: claude mcp add playwright npx @playwright/mcp@latest
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+      - name: 🌐 Installer les navigateurs Playwright (chromium + deps système)
+        run: npx --yes playwright install --with-deps chromium
+
+      - name: ✅ Vérifier que le serveur MCP répond
+        run: |
+          claude mcp list
+          claude mcp get playwright
+
+      # ── PASSE 1 : génère le Contrat + le résumé + les questions ────────────
+      # Si regenerer_contrat est décoché, on réutilise le Contrat existant (économie).
+      - name: 🧠 Passe 1 — Génération du Contrat
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ODOO_PASSWORD: ${{ secrets.ODOO_PASSWORD }}
+        run: |
+          if [ "${{ inputs.regenerer_contrat }}" = "false" ]; then
+            echo "[e2e_v2] Mode économie : réutilisation du Contrat si présent."
+            python e2e_v2.py --analyze --reuse-if-exists --module=${{ inputs.module }}
+            # Détection auto : si le résumé réutilisé n'a PAS de section PISTES,
+            # on le rafraîchit depuis le JSON (petit coût, le Contrat n'est PAS régénéré).
+            RESUME_FILE="contrats/${{ inputs.module }}_resume.md"
+            if [ ! -f "$RESUME_FILE" ] || ! grep -q "=== PISTES ===" "$RESUME_FILE"; then
+              echo "[e2e_v2] Résumé sans pistes détecté — rafraîchissement depuis le JSON."
+              python e2e_v2.py --refresh-resume --module=${{ inputs.module }}
+            else
+              echo "[e2e_v2] Résumé déjà à jour (section PISTES présente) — rien à faire."
+            fi
+          else
+            python e2e_v2.py --analyze --module=${{ inputs.module }}
+          fi
+
+      # ── Construire le formulaire (pré-rempli avec le résumé + questions) ───
+      # AJOUT : on lit la section "=== PISTES ===" du résumé et on génère un
+      # champ multiselect (cases à cocher) dynamique — une case par piste.
+      # Si aucune piste n'est trouvée, le formulaire reste comme avant (juste le textarea).
+      - name: 🧱 Construire le formulaire de réponses
+        id: build_form
+        if: inputs.repondre_questions == true
+        env:
+          MODULE: ${{ inputs.module }}
+        run: |
+          python3 - <<'PYEOF'
+          import os
+          import yaml
+
+          module = os.environ["MODULE"]
+          resume_path = os.path.join("contrats", f"{module}_resume.md")
+
+          if os.path.exists(resume_path):
+              with open(resume_path, encoding="utf-8") as f:
+                  resume = f.read()
+          else:
+              resume = f"(Résumé introuvable pour {module} — la passe 1 a-t-elle réussi ?)"
+
+          # ── Extraire les pistes depuis la section "=== PISTES ===" du résumé ──
+          # Format attendu : une piste par ligne "id|nom".
+          pistes_choices = []
+          if "=== PISTES ===" in resume:
+              apres = resume.split("=== PISTES ===", 1)[1]
+              for ligne in apres.splitlines():
+                  ligne = ligne.strip()
+                  # On ignore les lignes vides, les commentaires entre parentheses,
+                  # et on ne garde que les vraies lignes "id|nom".
+                  if not ligne or ligne.startswith("(") or ligne.startswith("=="):
+                      continue
+                  if "|" in ligne:
+                      piste_id, _, nom = ligne.partition("|")
+                      piste_id = piste_id.strip()
+                      nom = nom.strip()
+                      if piste_id:
+                          # Le choix affiche "id : nom", et sa valeur est l'id.
+                          pistes_choices.append(f"{piste_id} : {nom}")
+
+          # ── Champ texte (résumé + questions) : INCHANGE ──────────────────────
+          fields = [
+              {
+                  "label": "reponses",
+                  "properties": {
+                      "display": (
+                          "Réponds sous chaque question (->), et ajoute en bas "
+                          "tout ce que tu veux préciser (comptes de test, valeurs "
+                          "de référence, corrections). Ce texte sera transmis à "
+                          "Claude comme faisant autorité."
+                      ),
+                      "type": "textarea",
+                      "required": True,
+                      "defaultValue": resume,
+                  },
+              }
+          ]
+
+          # ── Champ pistes (multiselect) : AJOUTE seulement si des pistes existent ──
+          if pistes_choices:
+              fields.append({
+                  "label": "pistes",
+                  "properties": {
+                      "display": "Pistes à tester (coche une ou plusieurs). Si tu ne coches rien, tout sera testé.",
+                      "type": "multiselect",
+                      "required": False,
+                      "choices": pistes_choices,
+                  },
+              })
+
+          config = {"fields": fields}
+
+          yaml_text = yaml.dump(config, allow_unicode=True, sort_keys=False)
+
+          delim = f"FORM_EOF_{os.urandom(8).hex()}"
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"yaml<<{delim}\n")
+              out.write(yaml_text)
+              out.write(f"\n{delim}\n")
+          PYEOF
+
+      # ── Formulaire interactif (ngrok, jusqu'à 5h) ──────────────────────────
+      # notifier-discord-webhook pointe vers le serveur de monitoring : dès que le
+      # lien ngrok est genere, l'action envoie le payload (contenant l'URL) au serveur.
+      - name: 📝 Répondre aux questions (jusqu'à 5h)
+        id: form
+        if: inputs.repondre_questions == true
+        continue-on-error: true
+        uses: boasiHQ/interactive-inputs@v2
+        with:
+          timeout: 18000
+          title: 'Réponses aux questions — E2E ${{ inputs.module }}'
+          ngrok-authtoken: ${{ secrets.NGROK_AUTHTOKEN }}
+          notifier-discord-enabled: "false"
+          interactive: ${{ steps.build_form.outputs.yaml }}
+
+      # ── Écrire les réponses dans contrats/<module>_reponses.md ─────────────
+      # AJOUT : on ajoute aussi les pistes cochees a la fin du fichier reponses.
+      - name: 💾 Enregistrer les réponses
+        if: inputs.repondre_questions == true
+        env:
+          REPONSES: ${{ steps.form.outputs.reponses }}
+          PISTES: ${{ steps.form.outputs.pistes }}
+          FORM_OUTCOME: ${{ steps.form.outcome }}
+          MODULE: ${{ inputs.module }}
+        run: |
+          mkdir -p contrats
+          if [ "$FORM_OUTCOME" = "success" ] && [ -n "$REPONSES" ]; then
+            printf '%s' "$REPONSES" > "contrats/${MODULE}_reponses.md"
+            if [ -n "$PISTES" ]; then
+              printf '\n\n=== PISTES CHOISIES ===\n%s\n' "$PISTES" >> "contrats/${MODULE}_reponses.md"
+              echo "[e2e_v2] Pistes choisies : $PISTES"
+            else
+              echo "[e2e_v2] Aucune piste cochée — toutes les pistes seront testées."
+            fi
+            echo "[e2e_v2] Réponses enregistrées ($(wc -c < contrats/${MODULE}_reponses.md) octets)."
+          else
+            echo "[e2e_v2] Pas de réponses (formulaire ignoré, expiré ou vide) — les tests utiliseront le Contrat seul."
+          fi
+
+      # ── PASSE 2a : génère le plan de scénarios (en tenant compte des réponses) ─
+      - name: 📋 Passe 2a — Génération du plan de test
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ODOO_PASSWORD: ${{ secrets.ODOO_PASSWORD }}
+        run: |
+          python e2e_v2.py --generate-scenarios --module=${{ inputs.module }}
+
+      # ── PASSE 2b : exécute les tests (périmètre limité pour maîtriser le coût) ─
+      - name: 🎭 Passe 2b — Exécution des tests E2E
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          ODOO_PASSWORD: ${{ secrets.ODOO_PASSWORD }}
+        run: |
+          ARGS="--run --module=${{ inputs.module }}"
+          if [ "${{ inputs.priorite_seulement }}" = "true" ]; then
+            ARGS="$ARGS --priority-only"
+          fi
+          if [ "${{ inputs.max_scenarios }}" != "0" ] && [ -n "${{ inputs.max_scenarios }}" ]; then
+            ARGS="$ARGS --max-scenarios=${{ inputs.max_scenarios }}"
+          fi
+          echo "[e2e_v2] Commande : python e2e_v2.py $ARGS"
+          python e2e_v2.py $ARGS
+
+      # ── Archiver les livrables (Contrat, scénarios, rapport) ───────────────
+      - name: 📎 Archiver les résultats
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-v2-${{ inputs.module }}
+          path: |
+            contrats/${{ inputs.module }}_*.md
+            contrats/${{ inputs.module }}_*.json
+            reports/${{ inputs.module }}_*.md
+          if-no-files-found: ignore
