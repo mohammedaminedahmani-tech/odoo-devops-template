@@ -362,8 +362,16 @@ def main():
     run('git commit -m "chore: apply odoo-devops-template"', cwd=target, ignore_error=True)
     run("git add .", cwd=project_dir, ignore_error=True)
     run('git commit -m "chore: add root devops files"', cwd=project_dir, ignore_error=True)
-    run(f"git push --force-with-lease origin {target_branch}", cwd=project_dir, ignore_error=True)
-    print(f"   ✅ Push effectué sur '{target_branch}'")
+    push_result = subprocess.run(
+        f"git push --force-with-lease origin {target_branch}",
+        shell=True, cwd=project_dir
+    )
+    if push_result.returncode == 0:
+        print(f"   ✅ Push effectué sur '{target_branch}'")
+    else:
+        print(f"   ❌ Le push a échoué (code {push_result.returncode}) — "
+              f"vérifie tes accès/credentials git puis relance le push manuellement :")
+        print(f"      cd \"{project_dir}\" && git push --force-with-lease origin {target_branch}")
 
     # ── 12. Auto-suppression du script ────────────────────────────────────
     print("\n🗑️  Suppression du script apply_template.py...")
