@@ -66,8 +66,13 @@ jobs:
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
+      - name: 📦 Installer le paquet Playwright (npm, pas npx)
+        run: |
+          npm init -y
+          npm install playwright --no-save
+          chmod +x node_modules/.bin/playwright || true
       - name: 🌐 Installer les navigateurs Playwright (chromium + deps système)
-        run: npx --yes playwright install --with-deps chromium
+        run: node node_modules/playwright/cli.js install --with-deps chromium
 
       - name: ✅ Vérifier que le serveur MCP répond
         run: |
