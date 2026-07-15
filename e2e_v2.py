@@ -197,6 +197,50 @@ def appeler_claude(prompt, timeout=1800):
     return data.get('result', '').strip()
 
 
+def appeler_claude_avec_retry(prompt, timeout=1800, max_retries=3):
+    """
+    Meme chose que appeler_claude, mais avec retry + backoff (20s, 40s, 60s...)
+    en cas d'echec. Utile surtout en mode MULTI-AGENT : quand plusieurs groupes
+    tournent en parallele, un throttling ou une erreur reseau ponctuelle sur un
+    des agents ne doit pas faire echouer tout le job. Reste utile aussi en
+    mono-agent (echecs reseau transitoires).
+    """
+    import time
+    derniere_erreur = None
+    for tentative in range(1, max_retries + 1):
+        try:
+            resultat = appeler_claude(prompt, timeout=timeout)
+            if resultat:
+                return resultat
+            derniere_erreur = "reponse vide"
+        except SystemExit:
+            raise
+        except Exception as e:
+            derniere_erreur = str(e)
+
+        if tentative < max_retries:
+            attente = 20 * tentative
+            print(f"[e2e_v2] ⚠️  Tentative {tentative}/{max_retries} echouee "
+                  f"({derniere_erreur}) — nouvelle tentative dans {attente}s...")
+            time.sleep(attente)
+        else:
+            print(f"[e2e_v2] ❌ Echec apres {max_retries} tentatives ({derniere_erreur}).")
+    return None
+
+
+def _nom_fichier(module_name, suffixe, groupe=None):
+    """
+    Construit un nom de fichier, avec le nom du GROUPE insere si precise
+    (mode multi-agent), pour que les agents paralleles n'ecrasent pas
+    mutuellement leurs fichiers (scenarios, rapports).
+    Ex: _nom_fichier("hr_shoorah_demande", "scenarios.md", groupe="grp1")
+        -> "hr_shoorah_demande_grp1_scenarios.md"
+    """
+    if groupe:
+        return f"{module_name}_{groupe}_{suffixe}"
+    return f"{module_name}_{suffixe}"
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # PROMPT PASSE 1
 # ══════════════════════════════════════════════════════════════════════════════
@@ -322,14 +366,23 @@ Q2. ...
 metier du code — par exemple : partie application mobile, workflow d'une demande,
 effets RH, calculs de paie, contraintes de securite... Deduis ces pistes toi-meme
 en comprenant le code, ne te limite pas a des mots-cles. Il peut y en avoir 2, 5,
-10 selon le module. Ecris UNE piste par ligne, au format exact "id|nom" ou :
+10 selon le module. Ecris UNE piste par ligne, au format exact "id|nom|depends_on" ou :
   - id  = identifiant court en minuscules sans espace (ex: mobile, demande, rh, paie)
   - nom = libelle lisible court (ex: API Mobile, Workflow de la demande)
+  - depends_on = liste des id d'autres pistes dont celle-ci depend fonctionnellement
+    (separes par des virgules, vide si aucune dependance). Une piste B "depend" d'une
+    piste A si tester B necessite qu'un scenario de A ait deja ete joue avant (ex: la
+    piste "paie" depend de "demande" si un conge doit d'abord etre approuve pour
+    impacter la paie). Cette info sert a savoir quelles pistes NE PEUVENT PAS etre
+    testees en parallele sur des agents differents (elles seront regroupees ensemble).
+    Si tu ne vois AUCUNE dependance reelle entre deux pistes, laisse vide : ne force
+    pas une dependance juste par prudence, ca reduirait le parallelisme pour rien.
 Exemple :
-mobile|API Mobile (routes /hr/mobile/*)
-demande|Workflow de la demande (draft->approved->done)
-rh|Effets RH (conges, planning)
-N'ajoute rien d'autre dans cette section : seulement les lignes "id|nom".)
+mobile|API Mobile (routes /hr/mobile/*)|
+demande|Workflow de la demande (draft->approved->done)|
+rh|Effets RH (conges, planning)|demande
+paie|Calculs de paie|demande,rh
+N'ajoute rien d'autre dans cette section : seulement les lignes "id|nom|depends_on".)
 
 == APRES AVOIR ECRIT LES 2 FICHIERS ==
 Reponds UNIQUEMENT par une ligne de confirmation, par exemple :
@@ -478,7 +531,7 @@ def analyser_module(module_name, force=True):
         return
 
     prompt = construire_prompt_passe1(module_name, py_files, xml_files)
-    reponse = appeler_claude(prompt)
+    reponse = appeler_claude_avec_retry(prompt)
 
     if not reponse:
         print("[e2e_v2] ❌ Pas de reponse exploitable de Claude.")
@@ -539,14 +592,18 @@ Q2. ...
 metier visible dans le Contrat — par exemple : partie application mobile, workflow
 d'une demande, effets RH, calculs de paie, contraintes de securite... Deduis ces
 pistes toi-meme. Il peut y en avoir 2, 5, 10. Ecris UNE piste par ligne, au format
-exact "id|nom" ou :
+exact "id|nom|depends_on" ou :
   - id  = identifiant court en minuscules sans espace (ex: mobile, demande, rh, paie)
   - nom = libelle lisible court (ex: API Mobile, Workflow de la demande)
+  - depends_on = liste des id d'autres pistes dont celle-ci depend fonctionnellement
+    (separes par des virgules, vide si aucune). Ne force pas une dependance par
+    prudence : laisse vide si tu ne vois pas de vraie dependance.
 Exemple :
-mobile|API Mobile (routes /hr/mobile/*)
-demande|Workflow de la demande (draft->approved->done)
-rh|Effets RH (conges, planning)
-N'ajoute rien d'autre dans cette section : seulement les lignes "id|nom".)
+mobile|API Mobile (routes /hr/mobile/*)|
+demande|Workflow de la demande (draft->approved->done)|
+rh|Effets RH (conges, planning)|demande
+paie|Calculs de paie|demande,rh
+N'ajoute rien d'autre dans cette section : seulement les lignes "id|nom|depends_on".)
 
 == APRES AVOIR ECRIT LE FICHIER ==
 Reponds UNIQUEMENT par une ligne de confirmation, ex :
@@ -574,7 +631,7 @@ def rafraichir_resume(module_name):
     print(f"[e2e_v2] Contrat charge ({nb_models} modeles) — le JSON ne sera PAS modifie.")
 
     prompt = construire_prompt_refresh_resume(module_name, contrat)
-    reponse = appeler_claude(prompt)
+    reponse = appeler_claude_avec_retry(prompt)
 
     if not reponse:
         print("[e2e_v2] ❌ Pas de reponse exploitable de Claude.")
@@ -633,23 +690,31 @@ def charger_contrat(module_name):
     return contrat, reponses
 
 
-def construire_prompt_scenarios(module_name, contrat, reponses):
+def construire_prompt_scenarios(module_name, contrat, reponses, pistes_cible=None):
     """
     Prompt passe 2 (mode scenarios) : a partir du Contrat, Claude genere la
     liste EXHAUSTIVE des scenarios de test qu'il executerait — sans les jouer.
-    Si des PISTES ont ete cochees dans le formulaire, on genere UNIQUEMENT les
-    scenarios de ces pistes (ciblage / economie).
+
+    Ciblage des pistes (deux sources possibles, avec priorite) :
+      1. `pistes_cible` (liste) : utilise en mode MULTI-AGENT. Un agent de
+         groupe recoit directement la liste des pistes qui lui sont assignees
+         par regrouper_pistes.py — PAS besoin du formulaire humain.
+      2. Sinon, les PISTES COCHEES du formulaire (mode mono-agent classique).
     """
     contrat_json = json.dumps(contrat, indent=2, ensure_ascii=False)
 
-   # ── Detecter les pistes choisies (section ajoutee par le formulaire) ──────
-    pistes_choisies = ""
-    if reponses and "=== PISTES CHOISIES ===" in reponses:
-        apres = reponses.split("=== PISTES CHOISIES ===", 1)[1]
-        # On prend TOUTES les lignes non vides (une piste cochee peut etre
-        # sur sa propre ligne quand plusieurs pistes sont selectionnees).
-        lignes_pistes = [l.strip() for l in apres.splitlines() if l.strip()]
-        pistes_choisies = ", ".join(lignes_pistes)
+    # ── Ciblage : priorite a pistes_cible (mode multi-agent/groupe) ───────────
+    if pistes_cible:
+        pistes_choisies = ", ".join(pistes_cible)
+    else:
+        # ── Sinon, detecter les pistes choisies via le formulaire (mono-agent) ──
+        pistes_choisies = ""
+        if reponses and "=== PISTES CHOISIES ===" in reponses:
+            apres = reponses.split("=== PISTES CHOISIES ===", 1)[1]
+            # On prend TOUTES les lignes non vides (une piste cochee peut etre
+            # sur sa propre ligne quand plusieurs pistes sont selectionnees).
+            lignes_pistes = [l.strip() for l in apres.splitlines() if l.strip()]
+            pistes_choisies = ", ".join(lignes_pistes)
 
     bloc_reponses = ""
     if reponses:
@@ -761,8 +826,9 @@ Ne cree aucun fichier. Retourne uniquement ce rapport markdown.
 """.strip()
 
 
-def generer_scenarios(module_name):
-    print(f"\n[e2e_v2] ═══ PASSE 2 (scenarios) — module '{module_name}' ═══\n")
+def generer_scenarios(module_name, pistes_cible=None, groupe=None):
+    label = f"module '{module_name}'" + (f" — groupe '{groupe}'" if groupe else "")
+    print(f"\n[e2e_v2] ═══ PASSE 2 (scenarios) — {label} ═══\n")
 
     contrat, reponses = charger_contrat(module_name)
     if contrat is None:
@@ -770,17 +836,20 @@ def generer_scenarios(module_name):
 
     nb_models = len(contrat.get("models", []))
     print(f"[e2e_v2] Contrat charge : {nb_models} modele(s)")
+    if pistes_cible:
+        print(f"[e2e_v2] 🎯 Pistes ciblees (groupe) : {', '.join(pistes_cible)}")
 
-    prompt = construire_prompt_scenarios(module_name, contrat, reponses)
-    reponse = appeler_claude(prompt)
+    prompt = construire_prompt_scenarios(module_name, contrat, reponses, pistes_cible=pistes_cible)
+    reponse = appeler_claude_avec_retry(prompt)
 
     if not reponse:
         print("[e2e_v2] ❌ Pas de reponse exploitable de Claude.")
         return
 
-    # Sauvegarde des scenarios
+    # Sauvegarde des scenarios (nom de fichier inclut le groupe si precise)
     os.makedirs(CONTRATS_DIR, exist_ok=True)
-    scenarios_path = os.path.join(CONTRATS_DIR, f"{module_name}_scenarios.md")
+    nom_fichier = _nom_fichier(module_name, "scenarios.md", groupe=groupe)
+    scenarios_path = os.path.join(CONTRATS_DIR, nom_fichier)
     with open(scenarios_path, "w", encoding="utf-8") as f:
         f.write(reponse)
     print(f"[e2e_v2] ✅ Scenarios sauvegardes : {scenarios_path}")
@@ -798,8 +867,14 @@ def generer_scenarios(module_name):
 # Produit un rapport final PASS/FAIL.
 # ══════════════════════════════════════════════════════════════════════════════
 
-def construire_prompt_run(module_name, contrat, scenarios, reponses, priority_only=False, max_scenarios=0):
+def construire_prompt_run(module_name, contrat, scenarios, reponses, priority_only=False,
+                           max_scenarios=0, groupe=None):
     contrat_json = json.dumps(contrat, indent=2, ensure_ascii=False)
+
+    # ── Prefixe des donnees de test : isole par groupe en mode multi-agent ────
+    # Evite les collisions entre plusieurs agents qui creent des donnees en
+    # parallele sur la MEME base Odoo (chacun a son prefixe unique).
+    prefixe_donnees = f"E2E_TEST_{groupe.upper()}_" if groupe else "E2E_TEST_"
 
     bloc_filtre = ""
     if priority_only or max_scenarios:
@@ -853,7 +928,7 @@ Veuillez utiliser l'outil Playwright pour derouler les scenarios QA listes ci-de
 == INSTRUCTIONS D'EXECUTION ==
 1. Verification technique : Si le serveur MCP Playwright est encore en cours d'initialisation, veuillez patienter quelques secondes avant d'initier la navigation.
 2. Authentification : Connectez-vous a l'application avec les identifiants fournis.
-3. Execution : Deroulez les scenarios de maniere continue pour evaluer l'ensemble du perimetre avant de rendre votre conclusion. Prefixez vos creations de donnees par "E2E_TEST_".
+3. Execution : Deroulez les scenarios de maniere continue pour evaluer l'ensemble du perimetre avant de rendre votre conclusion. Prefixez vos creations de donnees par "{prefixe_donnees}".
 {instr_perimetre}
 4. Debogage : En cas d'erreur ou d'ecart fonctionnel, utilisez la commande suivante pour analyser la logique source :
    python ast_tool.py --root=. --model=<model> --method=<methode>
@@ -924,8 +999,9 @@ def poster_rapport_github(rapport: str):
         return False
 
 
-def executer_tests(module_name, priority_only=False, max_scenarios=0):
-    print(f"\n[e2e_v2] ═══ PASSE 2 (execution reelle) — module '{module_name}' ═══\n")
+def executer_tests(module_name, priority_only=False, max_scenarios=0, groupe=None):
+    label = f"module '{module_name}'" + (f" — groupe '{groupe}'" if groupe else "")
+    print(f"\n[e2e_v2] ═══ PASSE 2 (execution reelle) — {label} ═══\n")
 
     if not ODOO_PASSWORD:
         print("[e2e_v2] ⚠️  ODOO_PASSWORD non defini (variable d'environnement).")
@@ -935,11 +1011,13 @@ def executer_tests(module_name, priority_only=False, max_scenarios=0):
     if contrat is None:
         return
 
-    # Charger les scenarios (passe 2 --generate-scenarios)
-    scenarios_path = os.path.join(CONTRATS_DIR, f"{module_name}_scenarios.md")
+    # Charger les scenarios (passe 2 --generate-scenarios), nom incluant le groupe
+    nom_scenarios = _nom_fichier(module_name, "scenarios.md", groupe=groupe)
+    scenarios_path = os.path.join(CONTRATS_DIR, nom_scenarios)
     if not os.path.exists(scenarios_path):
         print(f"[e2e_v2] ❌ Scenarios introuvables : {scenarios_path}")
-        print(f"[e2e_v2] Lance d'abord : python e2e_v2.py --generate-scenarios --module={module_name}")
+        suffixe_groupe = f" --groupe={groupe}" if groupe else ""
+        print(f"[e2e_v2] Lance d'abord : python e2e_v2.py --generate-scenarios --module={module_name}{suffixe_groupe}")
         return
     with open(scenarios_path, encoding='utf-8') as f:
         scenarios = f.read()
@@ -954,28 +1032,36 @@ def executer_tests(module_name, priority_only=False, max_scenarios=0):
 
     prompt = construire_prompt_run(module_name, contrat, scenarios, reponses,
                                    priority_only=priority_only,
-                                   max_scenarios=max_scenarios)
+                                   max_scenarios=max_scenarios,
+                                   groupe=groupe)
     # Timeout large : l'execution reelle est longue
-    reponse = appeler_claude(prompt, timeout=3600)
+    reponse = appeler_claude_avec_retry(prompt, timeout=3600)
 
     if not reponse:
         print("[e2e_v2] ❌ Pas de rapport exploitable.")
         return
 
-    # Sauvegarde du rapport
+    # Sauvegarde du rapport (nom inclut le groupe si precise)
     os.makedirs(REPORTS_DIR, exist_ok=True)
     now = datetime.now().strftime('%Y%m%d_%H%M%S')
-    rapport_path = os.path.join(REPORTS_DIR, f"{module_name}_rapport_{now}.md")
+    nom_rapport = _nom_fichier(module_name, f"rapport_{now}.md", groupe=groupe)
+    rapport_path = os.path.join(REPORTS_DIR, nom_rapport)
     with open(rapport_path, "w", encoding="utf-8") as f:
         f.write(reponse)
     print(f"[e2e_v2] ✅ Rapport sauvegarde : {rapport_path}")
 
-    # Poster le rapport dans l'issue GitHub (#5 par defaut)
-    en_tete = (
-        f"## 🧪 Rapport E2E v2 — {module_name} — "
-        f"{datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n"
-    )
-    poster_rapport_github(en_tete + reponse)
+    # ── Post GitHub : en mode MULTI-AGENT (groupe precise), on NE poste PAS ──
+    # automatiquement — un job de fusion separe consolide tous les rapports
+    # (setup + tous les groupes) puis poste UNE SEULE FOIS le rapport complet.
+    if groupe:
+        print(f"[e2e_v2] ℹ️  Mode groupe actif ('{groupe}') — pas de post GitHub "
+              f"individuel, la fusion s'en chargera.")
+    else:
+        en_tete = (
+            f"## 🧪 Rapport E2E v2 — {module_name} — "
+            f"{datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n"
+        )
+        poster_rapport_github(en_tete + reponse)
 
     print("\n" + "=" * 70)
     print("RAPPORT E2E :")
@@ -997,6 +1083,8 @@ def main():
     refresh_resume = False   # --refresh-resume : regenere le resume depuis le JSON
     priority_only = False
     max_scenarios = 0
+    pistes_cible = None   # --pistes=id1,id2,... (mode multi-agent : pistes du groupe)
+    groupe = None          # --groupe=NOM (mode multi-agent : isole fichiers + donnees)
 
     for arg in sys.argv[1:]:
         if arg == '--analyze':
@@ -1018,12 +1106,17 @@ def main():
                 max_scenarios = 0
         elif arg.startswith('--module='):
             module = arg.split('=', 1)[1].strip()
+        elif arg.startswith('--pistes='):
+            valeur = arg.split('=', 1)[1].strip()
+            pistes_cible = [p.strip() for p in valeur.split(',') if p.strip()] or None
+        elif arg.startswith('--groupe='):
+            groupe = arg.split('=', 1)[1].strip() or None
 
     if not module or not (analyze or gen_scenarios or run or refresh_resume):
         print("""
 e2e_v2.py — E2E v2 (Contrat JSON + scenarios + execution)
 
-Usage :
+Usage MONO-AGENT :
   # Passe 1 : generer le Contrat a partir du code
   python e2e_v2.py --analyze --module=hr_shoorah_demande
 
@@ -1039,15 +1132,21 @@ Usage :
   # Passe 2b limitee (gros modules) : seulement l'important, avec un plafond
   python e2e_v2.py --run --priority-only --max-scenarios=40 --module=hr_payroll_community
 
+Usage MULTI-AGENT (un agent = un groupe de pistes, cf. regrouper_pistes.py) :
+  python e2e_v2.py --generate-scenarios --module=X --pistes=demande,rh --groupe=grp1
+  python e2e_v2.py --run --module=X --pistes=demande,rh --groupe=grp1
+
 Options d'execution (--run) :
   --priority-only     ne teste que test_level 1 + erreurs + transitions interdites + contraintes
   --max-scenarios=N   plafond dur du nombre de scenarios (maitrise du cout)
+  --pistes=id1,id2    (multi-agent) limite la generation de scenarios a ces pistes
+  --groupe=NOM        (multi-agent) isole les fichiers de sortie + les donnees de test
 
 Produit :
-  contrats/<module>_contrat.json    (Contrat — passe 1)
-  contrats/<module>_resume.md        (resume + questions — passe 1)
-  contrats/<module>_scenarios.md     (plan de test — passe 2a)
-  reports/<module>_rapport_*.md      (rapport final — passe 2b)
+  contrats/<module>_contrat.json         (Contrat — passe 1)
+  contrats/<module>_resume.md            (resume + questions + pistes — passe 1)
+  contrats/<module>[_groupe]_scenarios.md (plan de test — passe 2a)
+  reports/<module>[_groupe]_rapport_*.md  (rapport final — passe 2b)
 """.strip())
         sys.exit(0)
 
@@ -1057,10 +1156,10 @@ Produit :
     if refresh_resume:
         rafraichir_resume(module)
     if gen_scenarios:
-        generer_scenarios(module)
+        generer_scenarios(module, pistes_cible=pistes_cible, groupe=groupe)
     if run:
         executer_tests(module, priority_only=priority_only,
-                        max_scenarios=max_scenarios)
+                        max_scenarios=max_scenarios, groupe=groupe)
 
 
 if __name__ == '__main__':
