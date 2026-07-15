@@ -13,6 +13,10 @@ FICHIERS_RACINE = [
     # ── Systeme E2E v2 (Contrat + pistes + formulaire) ──
     "e2e_v2.py",
     "ast_tool.py",
+    # ── Multi-agent (setup partage + branches paralleles) ──
+    # Fichier generique, aucune config de projet dedans : copie telle quelle.
+    # Utilise uniquement si le mode "multi" est choisi au lancement du workflow.
+    "regrouper_pistes.py",
     "requirements.txt",
     "projet.md",
     ".env.example",
