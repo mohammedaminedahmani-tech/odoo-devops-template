@@ -1,4 +1,4 @@
-name: 🔬 E2E v2 — Contrat + Formulaire + Playwright
+name: 🔬 E2E v2 — Contrat + Formulaire + Playwright (mono / multi-agent)
 
 on:
   workflow_dispatch:
@@ -7,6 +7,14 @@ on:
         description: 'Module à tester (ex: hr_shoorah_demande)'
         required: true
         type: string
+      mode:
+        description: 'Mode d''exécution : mono-agent (simple, séquentiel) ou multi-agent (parallèle, gros modules)'
+        required: true
+        type: choice
+        options:
+          - mono
+          - multi
+        default: mono
       repondre_questions:
         description: 'Répondre aux questions de Claude avant les tests ? (ouvre un formulaire)'
         required: false
@@ -23,23 +31,86 @@ on:
         type: boolean
         default: true
       max_scenarios:
-        description: 'Plafond du nombre de scénarios exécutés (0 = pas de limite)'
+        description: 'Plafond du nombre de scénarios exécutés par agent (0 = pas de limite)'
         required: false
         type: string
         default: '0'
+      max_parallele:
+        description: '[Ignoré en mode mono] Nombre max de branches multi-agent en parallèle (0 = pas de limite)'
+        required: false
+        type: string
+        default: '3'
 
 permissions:
   contents: write
   actions: write
 
 jobs:
-  e2e_v2:
-    runs-on: ubuntu-latest
-    timeout-minutes: 360   # 6h = plafond dur des runners GitHub-hosted
 
-    # NOTE : la config (repo, issue, URL, DB, email, TEST_API_MOBILE) est fournie
-    # par e2e_v2.py (valeurs configurées par apply_template.py lors de l'install).
-    # Aucune valeur de projet en dur ici : ce workflow reste generique/reutilisable.
+  # ══════════════════════════════════════════════════════════════════════
+  # JOB — Préparation COMMUNE aux deux modes : Passe 1 (génération du Contrat)
+  # ══════════════════════════════════════════════════════════════════════
+  preparation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install Python dependencies
+        run: pip install requests python-dotenv pyyaml
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 🤖 Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      # ── PASSE 1 : génère le Contrat + le résumé + les questions + les pistes ─
+      - name: 🧠 Passe 1 — Génération du Contrat
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ "${{ inputs.regenerer_contrat }}" = "false" ]; then
+            echo "[e2e_v2] Mode économie : réutilisation du Contrat si présent."
+            python e2e_v2.py --analyze --reuse-if-exists --module=${{ inputs.module }}
+            RESUME_FILE="contrats/${{ inputs.module }}_resume.md"
+            if [ ! -f "$RESUME_FILE" ] || ! grep -q "=== PISTES ===" "$RESUME_FILE"; then
+              echo "[e2e_v2] Résumé sans pistes détecté — rafraîchissement depuis le JSON."
+              python e2e_v2.py --refresh-resume --module=${{ inputs.module }}
+            else
+              echo "[e2e_v2] Résumé déjà à jour (section PISTES présente) — rien à faire."
+            fi
+          else
+            python e2e_v2.py --analyze --module=${{ inputs.module }}
+          fi
+
+      - name: 📤 Uploader le Contrat pour les jobs suivants
+        uses: actions/upload-artifact@v4
+        with:
+          name: contrats-${{ inputs.module }}
+          path: contrats/${{ inputs.module }}_*
+          retention-days: 1
+          if-no-files-found: error
+
+  # ══════════════════════════════════════════════════════════════════════
+  # JOB — MODE MONO-AGENT : formulaire simple (pistes à cocher, individuel-
+  # lement), puis passe 2a/2b en séquence sur UN SEUL agent. Comportement
+  # strictement identique à l'ancien workflow mono-agent.
+  # ══════════════════════════════════════════════════════════════════════
+  mono_agent:
+    needs: preparation
+    if: inputs.mode == 'mono'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
 
     steps:
       - name: 📥 Checkout
@@ -71,6 +142,7 @@ jobs:
           npm init -y
           npm install playwright --no-save
           chmod +x node_modules/.bin/playwright || true
+
       - name: 🌐 Installer les navigateurs Playwright (chromium + deps système)
         run: node node_modules/playwright/cli.js install --with-deps chromium
 
@@ -79,33 +151,12 @@ jobs:
           claude mcp list
           claude mcp get playwright
 
-      # ── PASSE 1 : génère le Contrat + le résumé + les questions ────────────
-      # Si regenerer_contrat est décoché, on réutilise le Contrat existant (économie).
-      - name: 🧠 Passe 1 — Génération du Contrat
-        env:
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          ODOO_PASSWORD: ${{ secrets.ODOO_PASSWORD }}
-        run: |
-          if [ "${{ inputs.regenerer_contrat }}" = "false" ]; then
-            echo "[e2e_v2] Mode économie : réutilisation du Contrat si présent."
-            python e2e_v2.py --analyze --reuse-if-exists --module=${{ inputs.module }}
-            # Détection auto : si le résumé réutilisé n'a PAS de section PISTES,
-            # on le rafraîchit depuis le JSON (petit coût, le Contrat n'est PAS régénéré).
-            RESUME_FILE="contrats/${{ inputs.module }}_resume.md"
-            if [ ! -f "$RESUME_FILE" ] || ! grep -q "=== PISTES ===" "$RESUME_FILE"; then
-              echo "[e2e_v2] Résumé sans pistes détecté — rafraîchissement depuis le JSON."
-              python e2e_v2.py --refresh-resume --module=${{ inputs.module }}
-            else
-              echo "[e2e_v2] Résumé déjà à jour (section PISTES présente) — rien à faire."
-            fi
-          else
-            python e2e_v2.py --analyze --module=${{ inputs.module }}
-          fi
+      - name: 📥 Télécharger le Contrat
+        uses: actions/download-artifact@v4
+        with:
+          name: contrats-${{ inputs.module }}
+          path: contrats/
 
-      # ── Construire le formulaire (pré-rempli avec le résumé + questions) ───
-      # AJOUT : on lit la section "=== PISTES ===" du résumé et on génère un
-      # champ multiselect (cases à cocher) dynamique — une case par piste.
-      # Si aucune piste n'est trouvée, le formulaire reste comme avant (juste le textarea).
       - name: 🧱 Construire le formulaire de réponses
         id: build_form
         if: inputs.repondre_questions == true
@@ -125,26 +176,20 @@ jobs:
           else:
               resume = f"(Résumé introuvable pour {module} — la passe 1 a-t-elle réussi ?)"
 
-          # ── Extraire les pistes depuis la section "=== PISTES ===" du résumé ──
-          # Format attendu : une piste par ligne "id|nom".
           pistes_choices = []
           if "=== PISTES ===" in resume:
               apres = resume.split("=== PISTES ===", 1)[1]
               for ligne in apres.splitlines():
                   ligne = ligne.strip()
-                  # On ignore les lignes vides, les commentaires entre parentheses,
-                  # et on ne garde que les vraies lignes "id|nom".
                   if not ligne or ligne.startswith("(") or ligne.startswith("=="):
                       continue
                   if "|" in ligne:
-                      piste_id, _, nom = ligne.partition("|")
-                      piste_id = piste_id.strip()
-                      nom = nom.strip()
+                      parts = ligne.split("|")
+                      piste_id = parts[0].strip()
+                      nom = parts[1].strip() if len(parts) > 1 else piste_id
                       if piste_id:
-                          # Le choix affiche "id : nom", et sa valeur est l'id.
                           pistes_choices.append(f"{piste_id} : {nom}")
 
-          # ── Champ texte (résumé + questions) : INCHANGE ──────────────────────
           fields = [
               {
                   "label": "reponses",
@@ -162,7 +207,6 @@ jobs:
               }
           ]
 
-          # ── Champ pistes (multiselect) : AJOUTE seulement si des pistes existent ──
           if pistes_choices:
               fields.append({
                   "label": "pistes",
@@ -175,7 +219,6 @@ jobs:
               })
 
           config = {"fields": fields}
-
           yaml_text = yaml.dump(config, allow_unicode=True, sort_keys=False)
 
           delim = f"FORM_EOF_{os.urandom(8).hex()}"
@@ -185,9 +228,6 @@ jobs:
               out.write(f"\n{delim}\n")
           PYEOF
 
-      # ── Formulaire interactif (ngrok, jusqu'à 5h) ──────────────────────────
-      # notifier-discord-webhook pointe vers le serveur de monitoring : dès que le
-      # lien ngrok est genere, l'action envoie le payload (contenant l'URL) au serveur.
       - name: 📝 Répondre aux questions (jusqu'à 5h)
         id: form
         if: inputs.repondre_questions == true
@@ -200,8 +240,6 @@ jobs:
           notifier-discord-enabled: "false"
           interactive: ${{ steps.build_form.outputs.yaml }}
 
-      # ── Écrire les réponses dans contrats/<module>_reponses.md ─────────────
-      # AJOUT : on ajoute aussi les pistes cochees a la fin du fichier reponses.
       - name: 💾 Enregistrer les réponses
         if: inputs.repondre_questions == true
         env:
@@ -224,15 +262,12 @@ jobs:
             echo "[e2e_v2] Pas de réponses (formulaire ignoré, expiré ou vide) — les tests utiliseront le Contrat seul."
           fi
 
-      # ── PASSE 2a : génère le plan de scénarios (en tenant compte des réponses) ─
       - name: 📋 Passe 2a — Génération du plan de test
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          ODOO_PASSWORD: ${{ secrets.ODOO_PASSWORD }}
         run: |
           python e2e_v2.py --generate-scenarios --module=${{ inputs.module }}
 
-      # ── PASSE 2b : exécute les tests (périmètre limité pour maîtriser le coût) ─
       - name: 🎭 Passe 2b — Exécution des tests E2E
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -249,14 +284,534 @@ jobs:
           echo "[e2e_v2] Commande : python e2e_v2.py $ARGS"
           python e2e_v2.py $ARGS
 
-      # ── Archiver les livrables (Contrat, scénarios, rapport) ───────────────
       - name: 📎 Archiver les résultats
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-v2-${{ inputs.module }}
+          name: e2e-v2-mono-${{ inputs.module }}
           path: |
             contrats/${{ inputs.module }}_*.md
             contrats/${{ inputs.module }}_*.json
             reports/${{ inputs.module }}_*.md
           if-no-files-found: ignore
+
+  # ══════════════════════════════════════════════════════════════════════
+  # JOB — MODE MULTI-AGENT (1/4) : calcul setup/groupes + formulaire avancé
+  # (raccourcis "tout le setup" / "groupe entier" + pistes individuelles).
+  # Pas besoin de Node/Claude ici : uniquement du calcul Python local.
+  # ══════════════════════════════════════════════════════════════════════
+  multi_prepare:
+    needs: preparation
+    if: inputs.mode == 'multi'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    outputs:
+      setup_actif: ${{ steps.resoudre_selection.outputs.setup_actif }}
+      setup_pistes: ${{ steps.resoudre_selection.outputs.setup_pistes }}
+      groupes: ${{ steps.resoudre_selection.outputs.groupes }}
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install Python dependencies
+        run: pip install pyyaml
+
+      - name: 📥 Télécharger le Contrat
+        uses: actions/download-artifact@v4
+        with:
+          name: contrats-${{ inputs.module }}
+          path: contrats/
+
+      - name: 🧩 Calculer setup + groupes (complet, sans filtre)
+        run: |
+          RESULTAT=$(python3 regrouper_pistes.py --module=${{ inputs.module }})
+          echo "[e2e_v2] Structure calculée : $RESULTAT"
+          echo "$RESULTAT" > "contrats/${{ inputs.module }}_groupes.json"
+
+      - name: 🧱 Construire le formulaire (groupes entiers + pistes individuelles)
+        id: build_form
+        if: inputs.repondre_questions == true
+        env:
+          MODULE: ${{ inputs.module }}
+        run: |
+          python3 - <<'PYEOF'
+          import os
+          import json
+          import yaml
+
+          module = os.environ["MODULE"]
+          resume_path = os.path.join("contrats", f"{module}_resume.md")
+          groupes_path = os.path.join("contrats", f"{module}_groupes.json")
+
+          if os.path.exists(resume_path):
+              with open(resume_path, encoding="utf-8") as f:
+                  resume = f.read()
+          else:
+              resume = f"(Résumé introuvable pour {module} — la passe 1 a-t-elle réussi ?)"
+
+          with open(groupes_path, encoding="utf-8") as f:
+              calcul = json.load(f)
+
+          noms_pistes = {}
+          if "=== PISTES ===" in resume:
+              apres = resume.split("=== PISTES ===", 1)[1]
+              for ligne in apres.splitlines():
+                  ligne = ligne.strip()
+                  if not ligne or ligne.startswith("(") or ligne.startswith("=="):
+                      continue
+                  if "|" in ligne:
+                      parts = ligne.split("|")
+                      pid = parts[0].strip()
+                      nom = parts[1].strip() if len(parts) > 1 else pid
+                      if pid:
+                          noms_pistes[pid] = nom
+
+          setup_ids = (calcul.get("setup") or {}).get("pistes", [])
+          groupes = calcul.get("groupes", [])
+
+          choices = []
+
+          if len(setup_ids) > 1:
+              noms = [noms_pistes.get(p, p) for p in setup_ids]
+              choices.append("setup:ALL : 🏗️ TOUT LE SETUP -> " + " -> ".join(noms))
+
+          for g in groupes:
+              if len(g["ordre"]) > 1:
+                  noms = [noms_pistes.get(p, p) for p in g["ordre"]]
+                  choices.append(f"groupe:{g['groupe']} : 🔗 GROUPE ENTIER -> " + " -> ".join(noms))
+
+          toutes_pistes_ids = list(setup_ids) + [p for g in groupes for p in g["ordre"]]
+          for pid in toutes_pistes_ids:
+              choices.append(f"piste:{pid} : {noms_pistes.get(pid, pid)}")
+
+          fields = [
+              {
+                  "label": "reponses",
+                  "properties": {
+                      "display": (
+                          "Réponds sous chaque question (->), et ajoute en bas "
+                          "tout ce que tu veux préciser (comptes de test, valeurs "
+                          "de référence, corrections). Ce texte sera transmis à "
+                          "Claude comme faisant autorité."
+                      ),
+                      "type": "textarea",
+                      "required": True,
+                      "defaultValue": resume,
+                  },
+              }
+          ]
+
+          if choices:
+              fields.append({
+                  "label": "selection",
+                  "properties": {
+                      "display": (
+                          "Coche ce que tu veux tester. Une case '🏗️ TOUT LE SETUP' "
+                          "ou '🔗 GROUPE ENTIER' coche d'un coup toutes les pistes "
+                          "liées qu'elle contient. Tu peux aussi cocher des pistes "
+                          "individuelles précises, seules ou en complément. Combine "
+                          "librement les deux. Si tu ne coches rien, TOUT est testé."
+                      ),
+                      "type": "multiselect",
+                      "required": False,
+                      "choices": choices,
+                  },
+              })
+
+          config = {"fields": fields}
+          yaml_text = yaml.dump(config, allow_unicode=True, sort_keys=False)
+
+          delim = f"FORM_EOF_{os.urandom(8).hex()}"
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"yaml<<{delim}\n")
+              out.write(yaml_text)
+              out.write(f"\n{delim}\n")
+          PYEOF
+
+      - name: 📝 Répondre aux questions (jusqu'à 5h)
+        id: form
+        if: inputs.repondre_questions == true
+        continue-on-error: true
+        uses: boasiHQ/interactive-inputs@v2
+        with:
+          timeout: 18000
+          title: 'Réponses aux questions — E2E ${{ inputs.module }} (multi-agent)'
+          ngrok-authtoken: ${{ secrets.NGROK_AUTHTOKEN }}
+          notifier-discord-enabled: "false"
+          interactive: ${{ steps.build_form.outputs.yaml }}
+
+      - name: 💾 Enregistrer les réponses (contexte texte)
+        if: inputs.repondre_questions == true
+        env:
+          REPONSES: ${{ steps.form.outputs.reponses }}
+          FORM_OUTCOME: ${{ steps.form.outcome }}
+          MODULE: ${{ inputs.module }}
+        run: |
+          mkdir -p contrats
+          if [ "$FORM_OUTCOME" = "success" ] && [ -n "$REPONSES" ]; then
+            printf '%s' "$REPONSES" > "contrats/${MODULE}_reponses.md"
+            echo "[e2e_v2] Réponses enregistrées ($(wc -c < contrats/${MODULE}_reponses.md) octets)."
+          else
+            echo "[e2e_v2] Pas de réponses (formulaire ignoré, expiré ou vide) — les tests utiliseront le Contrat seul."
+          fi
+
+      - name: 🎯 Résoudre la sélection finale (setup + groupes à exécuter)
+        id: resoudre_selection
+        env:
+          SELECTION: ${{ steps.form.outputs.selection }}
+          MODULE: ${{ inputs.module }}
+        run: |
+          python3 - <<'PYEOF'
+          import os
+          import json
+          import subprocess
+
+          module = os.environ["MODULE"]
+          selection_brut = os.environ.get("SELECTION", "").strip()
+
+          groupes_path = os.path.join("contrats", f"{module}_groupes.json")
+          with open(groupes_path, encoding="utf-8") as f:
+              calcul_complet = json.load(f)
+
+          setup_ids_complet = (calcul_complet.get("setup") or {}).get("pistes", [])
+          groupes_par_id = {g["groupe"]: g["ordre"] for g in calcul_complet.get("groupes", [])}
+
+          pistes_choisies = set()
+          if selection_brut:
+              for item in selection_brut.split(","):
+                  item = item.strip()
+                  if " : " not in item:
+                      continue
+                  marqueur = item.split(" : ", 1)[0].strip()
+                  if marqueur == "setup:ALL":
+                      pistes_choisies.update(setup_ids_complet)
+                  elif marqueur.startswith("groupe:"):
+                      gid = marqueur.split(":", 1)[1]
+                      pistes_choisies.update(groupes_par_id.get(gid, []))
+                  elif marqueur.startswith("piste:"):
+                      pistes_choisies.add(marqueur.split(":", 1)[1])
+
+          if pistes_choisies:
+              print(f"[e2e_v2] Pistes finales choisies : {sorted(pistes_choisies)}")
+              cmd = ["python3", "regrouper_pistes.py", f"--module={module}",
+                     f"--pistes={','.join(sorted(pistes_choisies))}"]
+              resultat_json = subprocess.run(cmd, capture_output=True, text=True, check=True).stdout.strip()
+              calcul_final = json.loads(resultat_json)
+          else:
+              print("[e2e_v2] Aucune sélection — tout sera testé (calcul complet réutilisé).")
+              calcul_final = calcul_complet
+
+          with open(os.path.join("contrats", f"{module}_execution.json"), "w", encoding="utf-8") as f:
+              json.dump(calcul_final, f, indent=2, ensure_ascii=False)
+
+          setup = calcul_final.get("setup")
+          setup_actif = "true" if setup and setup.get("pistes") else "false"
+          setup_pistes = ",".join(setup["pistes"]) if setup else ""
+          groupes_json = json.dumps(calcul_final.get("groupes", []))
+
+          print(f"[e2e_v2] setup_actif={setup_actif}")
+          print(f"[e2e_v2] setup_pistes={setup_pistes}")
+          print(f"[e2e_v2] groupes={groupes_json}")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"setup_actif={setup_actif}\n")
+              out.write(f"setup_pistes={setup_pistes}\n")
+              out.write(f"groupes={groupes_json}\n")
+          PYEOF
+
+      - name: 📤 Uploader le calcul multi-agent pour les jobs suivants
+        uses: actions/upload-artifact@v4
+        with:
+          name: contrats-execution-${{ inputs.module }}
+          path: |
+            contrats/${{ inputs.module }}_groupes.json
+            contrats/${{ inputs.module }}_execution.json
+            contrats/${{ inputs.module }}_reponses.md
+          retention-days: 1
+          if-no-files-found: ignore
+
+  # ══════════════════════════════════════════════════════════════════════
+  # JOB — MODE MULTI-AGENT (2/4) : SETUP — fondations partagées, une seule
+  # fois, en séquence, AVANT les branches parallèles. Sauté proprement si
+  # aucune fondation partagée n'a été détectée.
+  # ══════════════════════════════════════════════════════════════════════
+  setup_fondations:
+    needs: [preparation, multi_prepare]
+    if: inputs.mode == 'multi' && needs.multi_prepare.outputs.setup_actif == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install Python dependencies
+        run: pip install requests python-dotenv pyyaml
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 🤖 Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: 🎭 Add MCP Playwright to Claude
+        run: claude mcp add playwright npx @playwright/mcp@latest
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+      - name: 📦 Installer le paquet Playwright (npm, pas npx)
+        run: |
+          npm init -y
+          npm install playwright --no-save
+          chmod +x node_modules/.bin/playwright || true
+
+      - name: 🌐 Installer les navigateurs Playwright (chromium + deps système)
+        run: node node_modules/playwright/cli.js install --with-deps chromium
+
+      - name: 📥 Télécharger le Contrat
+        uses: actions/download-artifact@v4
+        with:
+          name: contrats-${{ inputs.module }}
+          path: contrats/
+
+      - name: 📥 Télécharger le calcul multi-agent
+        uses: actions/download-artifact@v4
+        with:
+          name: contrats-execution-${{ inputs.module }}
+          path: contrats/
+
+      - name: 📋 Scénarios — SETUP (fondations partagées)
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          python e2e_v2.py --generate-scenarios --module=${{ inputs.module }} \
+            --pistes="${{ needs.multi_prepare.outputs.setup_pistes }}" \
+            --groupe=setup
+
+      - name: 🎭 Exécution — SETUP (fondations partagées)
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ODOO_PASSWORD: ${{ secrets.ODOO_PASSWORD }}
+        run: |
+          ARGS="--run --module=${{ inputs.module }} --pistes=${{ needs.multi_prepare.outputs.setup_pistes }} --groupe=setup"
+          if [ "${{ inputs.priorite_seulement }}" = "true" ]; then
+            ARGS="$ARGS --priority-only"
+          fi
+          if [ "${{ inputs.max_scenarios }}" != "0" ] && [ -n "${{ inputs.max_scenarios }}" ]; then
+            ARGS="$ARGS --max-scenarios=${{ inputs.max_scenarios }}"
+          fi
+          echo "[e2e_v2] Commande : python e2e_v2.py $ARGS"
+          python e2e_v2.py $ARGS
+
+      - name: 📤 Uploader les résultats du setup
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultats-${{ inputs.module }}-setup
+          path: |
+            contrats/${{ inputs.module }}_setup_*.md
+            reports/${{ inputs.module }}_setup_*.md
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ══════════════════════════════════════════════════════════════════════
+  # JOB — MODE MULTI-AGENT (3/4) : branches parallèles (fan-out), APRÈS le
+  # setup (si présent).
+  # ══════════════════════════════════════════════════════════════════════
+  e2e_par_groupe:
+    needs: [preparation, multi_prepare, setup_fondations]
+    if: inputs.mode == 'multi' && !failure() && !cancelled()
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      matrix:
+        groupe: ${{ fromJson(needs.multi_prepare.outputs.groupes || '[]') }}
+      max-parallel: ${{ fromJson(inputs.max_parallele == '0' && '256' || inputs.max_parallele) }}
+      fail-fast: false
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install Python dependencies
+        run: pip install requests python-dotenv pyyaml
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 🤖 Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: 🎭 Add MCP Playwright to Claude
+        run: claude mcp add playwright npx @playwright/mcp@latest
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+      - name: 📦 Installer le paquet Playwright (npm, pas npx)
+        run: |
+          npm init -y
+          npm install playwright --no-save
+          chmod +x node_modules/.bin/playwright || true
+
+      - name: 🌐 Installer les navigateurs Playwright (chromium + deps système)
+        run: node node_modules/playwright/cli.js install --with-deps chromium
+
+      - name: 📥 Télécharger le Contrat
+        uses: actions/download-artifact@v4
+        with:
+          name: contrats-${{ inputs.module }}
+          path: contrats/
+
+      - name: 📥 Télécharger le calcul multi-agent
+        uses: actions/download-artifact@v4
+        with:
+          name: contrats-execution-${{ inputs.module }}
+          path: contrats/
+
+      - name: 📋 Passe 2a — Scénarios pour le groupe ${{ matrix.groupe.groupe }}
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          python e2e_v2.py --generate-scenarios --module=${{ inputs.module }} \
+            --pistes="${{ join(matrix.groupe.pistes, ',') }}" \
+            --groupe=${{ matrix.groupe.groupe }}
+
+      - name: 🎭 Passe 2b — Exécution pour le groupe ${{ matrix.groupe.groupe }}
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ODOO_PASSWORD: ${{ secrets.ODOO_PASSWORD }}
+        run: |
+          ARGS="--run --module=${{ inputs.module }} --pistes=${{ join(matrix.groupe.pistes, ',') }} --groupe=${{ matrix.groupe.groupe }}"
+          if [ "${{ inputs.priorite_seulement }}" = "true" ]; then
+            ARGS="$ARGS --priority-only"
+          fi
+          if [ "${{ inputs.max_scenarios }}" != "0" ] && [ -n "${{ inputs.max_scenarios }}" ]; then
+            ARGS="$ARGS --max-scenarios=${{ inputs.max_scenarios }}"
+          fi
+          echo "[e2e_v2] Commande : python e2e_v2.py $ARGS"
+          python e2e_v2.py $ARGS
+
+      - name: 📤 Uploader les résultats du groupe ${{ matrix.groupe.groupe }}
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultats-${{ inputs.module }}-${{ matrix.groupe.groupe }}
+          path: |
+            contrats/${{ inputs.module }}_${{ matrix.groupe.groupe }}_*.md
+            reports/${{ inputs.module }}_${{ matrix.groupe.groupe }}_*.md
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ══════════════════════════════════════════════════════════════════════
+  # JOB — MODE MULTI-AGENT (4/4) : fusionne les rapports (setup + tous les
+  # groupes) et poste UNE SEULE FOIS le rapport consolidé sur GitHub.
+  # ══════════════════════════════════════════════════════════════════════
+  fusionner_rapports:
+    needs: [preparation, multi_prepare, setup_fondations, e2e_par_groupe]
+    if: always() && inputs.mode == 'multi'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install Python dependencies
+        run: pip install requests python-dotenv
+
+      - name: 📥 Télécharger tous les résultats (setup + groupes)
+        uses: actions/download-artifact@v4
+        with:
+          pattern: resultats-${{ inputs.module }}-*
+          path: resultats_bruts/
+          merge-multiple: false
+
+      - name: 🧵 Fusionner les rapports en un seul + poster sur GitHub
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          MODULE: ${{ inputs.module }}
+        run: |
+          python3 - <<'PYEOF'
+          import os
+          import sys
+          import glob
+          import requests
+          from datetime import datetime
+
+          # Repo et numero d'issue lus directement depuis la config de e2e_v2.py
+          # (source unique de verite — pas de valeur de projet dupliquee ici).
+          sys.path.insert(0, os.getcwd())
+          from e2e_v2 import GITHUB_REPO, GITHUB_ISSUE_NUMBER
+
+          module = os.environ["MODULE"]
+          token = os.environ.get("GITHUB_TOKEN")
+
+          rapport_paths = sorted(glob.glob(f"resultats_bruts/**/reports/{module}_*_rapport_*.md", recursive=True))
+
+          os.makedirs("reports", exist_ok=True)
+          rapport_final_path = f"reports/{module}_FUSION_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+
+          if not rapport_paths:
+              contenu = "⚠️ Aucun rapport trouvé — tous les agents ont peut-être échoué."
+          else:
+              morceaux = [f"## 🧪 Rapport E2E v2 (multi-agents) — {module} — {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"]
+              morceaux.append(f"*{len(rapport_paths)} agent(s) exécuté(s) (setup + branches parallèles).*\n")
+              for p in rapport_paths:
+                  groupe = p.split("/reports/")[0].split("resultats-")[-1].split(f"{module}-")[-1] if "resultats-" in p else "?"
+                  label = "🏗️ SETUP" if groupe == "setup" else f"📦 {groupe}"
+                  with open(p, encoding="utf-8") as f:
+                      contenu_groupe = f.read()
+                  morceaux.append(f"\n---\n\n### {label}\n\n{contenu_groupe}")
+              contenu = "\n".join(morceaux)
+
+          with open(rapport_final_path, "w", encoding="utf-8") as f:
+              f.write(contenu)
+          print(f"[fusion] Rapport fusionné écrit : {rapport_final_path}")
+
+          if not token:
+              print("[fusion] ⚠️ GITHUB_TOKEN manquant — rapport non posté sur GitHub.")
+          else:
+              url = f"https://api.github.com/repos/{GITHUB_REPO}/issues/{GITHUB_ISSUE_NUMBER}/comments"
+              headers = {
+                  "Authorization": f"Bearer {token}",
+                  "Accept": "application/vnd.github+json",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              }
+              corps = contenu if len(contenu) < 60000 else contenu[:60000] + "\n\n*(rapport tronqué — voir l'artefact complet)*"
+              resp = requests.post(url, headers=headers, json={"body": corps}, timeout=30)
+              if resp.status_code == 201:
+                  print(f"[fusion] ✅ Rapport posté dans Issue #{GITHUB_ISSUE_NUMBER}")
+              else:
+                  print(f"[fusion] ❌ Erreur GitHub API : {resp.status_code} — {resp.text[:200]}")
+          PYEOF
+
+      - name: 📎 Archiver le rapport fusionné
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapport-final-${{ inputs.module }}
+          path: reports/*_FUSION_*.md
+          if-no-files-found: warn
